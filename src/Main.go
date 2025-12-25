@@ -27,6 +27,8 @@ type Room struct {
 	Clients           map[string]*websocket.Conn
 	ClientsReverseMap map[*websocket.Conn]string
 	PendingClients    []*websocket.Conn
+	CreatedTime       int64
+	HasHost           bool
 }
 
 var (
@@ -89,6 +91,25 @@ func monitorTraffic() {
 				atomic.StoreInt32(&currentDifficulty, targetDiff)
 			}
 		}
+	}
+}
+
+func cleanUnusedRooms() {
+	ticker := time.NewTicker(15 * time.Second)
+
+	for range ticker.C {
+
+		roomsMu.Lock()
+
+		for code, room := range rooms {
+			if !room.HasHost && time.Now().UnixMilli()-room.CreatedTime > 60*1000 {
+
+				delete(rooms, code)
+
+			}
+		}
+
+		roomsMu.Unlock()
 	}
 }
 
@@ -397,6 +418,7 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 
 		rooms[roomID].Host = conn
 		rooms[roomID].HostIP = r.RemoteAddr
+		rooms[roomID].HasHost = true
 
 		roomsMu.Unlock()
 	}
@@ -536,6 +558,8 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 		ClientsReverseMap: make(map[*websocket.Conn]string),
 		PendingClients:    make([]*websocket.Conn, 0),
 		HostMu:            sync.Mutex{},
+		CreatedTime:       time.Now().UnixMilli(),
+		HasHost:           false,
 	}
 
 	fmt.Fprintf(w, "{\"ok\":true,\"message\":%s}", gameId)
@@ -595,6 +619,7 @@ func main() {
 
 	startCleanupLoop()
 	go monitorTraffic()
+	go cleanUnusedRooms()
 
 	http.HandleFunc("/", mainPathHandler)
 	http.HandleFunc("/create", handleCreatePath)
