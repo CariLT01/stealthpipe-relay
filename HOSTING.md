@@ -10,6 +10,8 @@ The exact steps depend on your server provider, but the general process is:
 2. Set up the Docker container if your provider requires it. Using Docker is recommended, but you can also run it without Docker (though this may cause more issues). You can ask an AI assistant for help if needed.  
 3. If your provider allows choosing a server location, pick the one closest to you to reduce latency and improve connection speed.  
 
+Of course, you may always use the EXE file in the repository, but this is not recommended for production.
+
 StealthPipe Relay updates frequently, so you will need to re-upload the files to your server to stay current.
 
 > [!IMPORTANT]
