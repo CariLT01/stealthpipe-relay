@@ -628,11 +628,13 @@ func relayForwardingLoop(conn *websocket.Conn, isHost bool, gameId string) {
 
 	// Before cleaning up, send a disonnect packet to the server
 
+	roomsMu.RLock()
 	_, exists := rooms[gameId]
 	if !exists {
 		// Someone already deleted the room
 		return
 	}
+	roomsMu.RUnlock()
 
 	if !isHost {
 
