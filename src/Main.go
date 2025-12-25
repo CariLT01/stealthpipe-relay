@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -366,13 +367,19 @@ func pingPathHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "7860" // Default for Hugging Face or Local testing
+	}
+
 	http.HandleFunc("/", mainPathHandler)
 	http.HandleFunc("/create", handleCreatePath)
 	http.HandleFunc("/join", handleRelay)
 	http.HandleFunc("/stats", statsPathHandler)
 	http.HandleFunc("/ping", pingPathHandler)
 	fmt.Println("StealthPipeRelay: Server started on :7860")
-	if err := http.ListenAndServe(":7860", nil); err != nil {
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		panic(err)
 	}
 }
