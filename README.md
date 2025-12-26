@@ -1,5 +1,7 @@
 # StealthPipe Relay
 
+*Portable, Multi-Threaded, Lightweight*
+
 This repository contains the StealthPipe relay and is licensed under the MIT License.
 
 ### Hosting the Relay
@@ -8,14 +10,11 @@ Instructions for self-hosting the relay can be found in `HOSTING.md`.
 
 ### Performance
 
-While faster than a Python or NodeJS server, it's still not very optimized due to the amount of locks used. I literally wrote the relay in 3 days, don't judge the spaghetti code please.
+The StealthPipe relay is small, portable, and efficient. It is able to utilize multiple cores simultaneously and it only uses up to 64 MB of memory (it normally only uses up to 7 MB of RAM). It's a low overhead relay and can be easily hosted on any environment.
 
 ### Bugs and Issues
 
 You will probably find a lot of them. Report them in the issues tab.
-
-
-
 
 ### Frequently Asked Questions
 

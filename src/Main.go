@@ -861,7 +861,7 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 }
 
 func mainPathHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "StealthPipe Relay: Online")
+	fmt.Fprintf(w, "Service is Online")
 }
 
 func statsPathHandler(w http.ResponseWriter, r *http.Request) {
@@ -923,7 +923,7 @@ func main() {
 	http.HandleFunc("/stats", statsPathHandler)
 	http.HandleFunc("/pow", handleProofOfWorkEndpoint)
 	http.HandleFunc("/ping", pingPathHandler)
-	fmt.Println("StealthPipeRelay: Server started on :7860")
+	fmt.Println("Service: Server started")
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		panic(err)
 	}

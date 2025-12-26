@@ -71,3 +71,23 @@ Unlike Render, HuggingFace does not have a bandwidth limit and has an incredible
 https://[Your HuggingFace Username]-[Your Space Name].hf.space
 
 If you run into issues, an AI assistant can help troubleshoot. Official support is not available 24/7.
+
+### Hosting on a VPS
+
+It's possible to host this on a service like Oracle, which provides a lot of computing power for free. However, you will have to give your financial information to Oracle so they can verify your identity (and charge you while you're not looking lol).
+
+The steps are almost the same as the previous providers. Use an AI assistant to help you out if needed.
+
+### Hosting on AWS
+
+Not recommended, you might wake up to a bill the price of a house because you forgot to turn off an AWS instance.
+
+If you really want to host it on AWS, the steps are almost the same as the previous providers. Use an AI assistant to help you out if needed.
+
+### Cloudflare Tunnel
+
+This one is special, because you host the relay at home and you use Cloudflare Tunnels to make it available on the web. It also protects you from DDoS and it's completely free. However, you will need to buy a domain for your relay, which costs a few dollars a year. Unfortunately, it's really hard to get a free domain today, probably due to the crumbling economy.
+
+### End
+
+Unfortunately, not a lot of free hosting services exist today. If you want the best option that balances compute and is free, pick HuggingFace spaces (although you might get banned).
