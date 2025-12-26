@@ -136,11 +136,20 @@ func deadlockWatchdog() {
 		case <-lockAcquired:
 			isHealthy.Store(true)
 		case <-time.After(10 * time.Second): // If we can't RLock in 10s, we are deadlocked
-			fmt.Println("CRITICAL: Deadlock detected on roomsMu!")
+
 			isHealthy.Store(false)
 
-			// OPTIONAL: Dump goroutines to logs to see WHERE the deadlock is
-			// pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+			fmt.Println("\n========================================")
+			fmt.Println("CRITICAL: DEADLOCK DETECTED ON roomsMu")
+			fmt.Println("Dumping all goroutine stacks:")
+			fmt.Println("========================================")
+
+			// Create a buffer large enough for many goroutines
+			buf := make([]byte, 1024*1024)
+			n := runtime.Stack(buf, true) // 'true' gets stacks for ALL goroutines
+			fmt.Printf("%s\n", buf[:n])
+
+			fmt.Println("========================================")
 
 		}
 
@@ -520,20 +529,19 @@ func handlePacket(packetData []byte, messageType int, ws *websocket.Conn, gameId
 
 		roomsMu.RLock()
 		room, exists := rooms[gameId]
-
-		if !exists || room == nil {
+		if !exists || room == nil || room.Host == nil {
 			roomsMu.RUnlock()
 			return
 		}
-		if rooms[gameId].Host == nil {
-			fmt.Println("Room has no host, cancelled forwarding")
-			return
-		}
-		roomsMu.RUnlock()
-		room.HostMu.Lock()
+		// Capture the host pointer and the room's specific mutex
+		host := room.Host
+		hostMu := &room.HostMu
+		roomsMu.RUnlock() // RELEASE GLOBAL LOCK IMMEDIATELY
 
-		err := rooms[gameId].Host.WriteMessage(websocket.BinaryMessage, packetData)
-		room.HostMu.Unlock()
+		// Now do the heavy lifting
+		hostMu.Lock()
+		err := host.WriteMessage(websocket.BinaryMessage, packetData)
+		hostMu.Unlock()
 
 		if err != nil {
 			fmt.Println("An error occurred while trying to forward the packet: ", err.Error())
