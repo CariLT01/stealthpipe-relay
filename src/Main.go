@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,6 +58,11 @@ var roomIdleNoClientDelay = int64(300_000) // Cleanup an empty room if there wer
 // Other
 var receiveIdleDelay = 50 // 50 ms idle delay between each packet when no clients are connected to the room
 
+// Stability and instance health
+var terminateWhenUnhealthy = true // Automatically terminate this instance to force a restart
+
+// --------------------------------------------------------------------------------------- //
+
 type Room struct {
 	Host               *websocket.Conn
 	HostMu             sync.Mutex
@@ -99,6 +105,58 @@ var (
 	// mu protects the map from concurrent access
 	usedSaltsMutex sync.Mutex
 )
+
+var (
+	isHealthy atomic.Bool
+)
+
+func healthCheckGoroutines() bool {
+	count := runtime.NumGoroutine()
+	if count > 5000 { // Adjust based on your expected max players
+		fmt.Printf("UNHEALTHY: Goroutine leak detected (%d)\n", count)
+		return false
+	}
+	return true
+}
+
+func deadlockWatchdog() {
+	ticker := time.NewTicker(5 * time.Second)
+	for range ticker.C {
+		// Create a channel to wait for the lock
+		lockAcquired := make(chan bool, 1)
+
+		go func() {
+			roomsMu.RLock()
+			// Do nothing
+			roomsMu.RUnlock()
+			lockAcquired <- true
+		}()
+
+		select {
+		case <-lockAcquired:
+			isHealthy.Store(true)
+		case <-time.After(10 * time.Second): // If we can't RLock in 10s, we are deadlocked
+			fmt.Println("CRITICAL: Deadlock detected on roomsMu!")
+			isHealthy.Store(false)
+
+			// OPTIONAL: Dump goroutines to logs to see WHERE the deadlock is
+			// pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+
+		}
+
+		if !healthCheckGoroutines() {
+			fmt.Println("UNHEALTHY: Goroutine leak detected")
+			os.Exit(1)
+		}
+
+		if !isHealthy.Load() {
+			if terminateWhenUnhealthy {
+				fmt.Println("Terminating instance to force a restart")
+				os.Exit(1)
+			}
+		}
+	}
+}
 
 func monitorTraffic() {
 	ticker := time.NewTicker(1 * time.Second)
@@ -879,7 +937,15 @@ func statsPathHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func pingPathHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "OK")
+	if !isHealthy.Load() {
+		// Broken, kill me
+		http.Error(w, "Instance unhealthy", http.StatusServiceUnavailable)
+		return
+	}
+
+	// OK
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func generateProofOfWork() (string, string) {
@@ -927,6 +993,10 @@ func main() {
 	go cleanUnusedRooms()
 	go cleanIdleRooms()
 
+	isHealthy.Store(true)
+
+	go deadlockWatchdog()
+
 	http.HandleFunc("/", mainPathHandler)
 	http.HandleFunc("/create", handleCreatePath)
 	http.HandleFunc("/join", handleRelay)
@@ -934,7 +1004,16 @@ func main() {
 	http.HandleFunc("/pow", handleProofOfWorkEndpoint)
 	http.HandleFunc("/ping", pingPathHandler)
 	fmt.Println("Service: Server started")
+
+	/*go func() {
+		fmt.Println("Triggered test code")
+		// TEST CODE
+		roomsMu.Lock()
+		roomsMu.Lock()
+	}()*/
+
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		panic(err)
 	}
+
 }
