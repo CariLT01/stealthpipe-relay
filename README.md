@@ -15,6 +15,7 @@ The StealthPipe relay is small, portable, and efficient. It is able to utilize m
 ### Bugs and Issues
 
 You will probably find a lot of them. Report them in the issues tab.
+Deadlocks do happen, sorry.
 
 ### Frequently Asked Questions
 

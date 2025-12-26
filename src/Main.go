@@ -295,6 +295,9 @@ func startCleanupLoop() {
 		}
 	}()
 }
+
+// HANDLE CLEANUP NEEDS THE roomsMu LOCK! ALWAYS UNLOCK BEFORE CLEANING UP. ALSO, ALWAYS UNLOCK WHEN CALLING .CLOSE() ON A WEBSOCKET THAT HAS A RELAY LOOP ALREADY RUNNING, WHICH WILL TRIGGER HANDLECLEANUP, WHICH WILL NEED THE LOCK.
+// IF NOT UNLOCKED BEFORE, A DEADLOCK WILL HAPPEN
 func handleCleanup(conn *websocket.Conn, gameId string) {
 	// 1. Acquire the lock ONLY to modify the map
 	roomsMu.Lock()
@@ -697,6 +700,7 @@ func relayForwardingLoop(conn *websocket.Conn, isHost bool, gameId string) {
 	_, exists := rooms[gameId]
 	if !exists {
 		// Someone already deleted the room
+		roomsMu.RUnlock()
 		return
 	}
 	roomsMu.RUnlock()
