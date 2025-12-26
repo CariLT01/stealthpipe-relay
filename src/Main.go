@@ -168,33 +168,33 @@ func cleanUnusedRooms() {
 func cleanIdleRooms() {
 	ticker := time.NewTicker(35 * time.Second)
 	for range ticker.C {
-		var toDelete []string
+		var toClose []*websocket.Conn
+		var codesToDelete []string
 		now := time.Now().UnixMilli()
 
-		roomsMu.RLock() // Use RLock first to find targets
+		roomsMu.RLock()
 		for code, room := range rooms {
-			// Check if room has exceeded its life without a host or activity
 			if now-room.LastRoomFilledTime.Load() > roomIdleNoClientDelay {
-				toDelete = append(toDelete, code)
+				codesToDelete = append(codesToDelete, code)
+				if room.Host != nil {
+					toClose = append(toClose, room.Host)
+				}
 			}
 		}
 		roomsMu.RUnlock()
 
-		if len(toDelete) > 0 {
+		if len(codesToDelete) > 0 {
 			roomsMu.Lock()
-			for _, code := range toDelete {
-				room, exists := rooms[code]
-				if exists {
-					if room.Host != nil {
-						room.HostMu.Lock()
-						room.Host.Close() // Close the connection
-						room.HostMu.Unlock()
-					}
-					delete(rooms, code)
-					fmt.Printf("Cleaned up idle room: %s\n", code)
-				}
+			for _, code := range codesToDelete {
+				delete(rooms, code)
 			}
 			roomsMu.Unlock()
+
+			// Close connections AFTER unlocking roomsMu
+			for _, conn := range toClose {
+				conn.Close()
+				fmt.Println("Closed idle connection")
+			}
 		}
 	}
 }
@@ -228,57 +228,53 @@ func startCleanupLoop() {
 		}
 	}()
 }
+func handleCleanup(conn *websocket.Conn, gameId string) {
+	// 1. Acquire the lock ONLY to modify the map
+	roomsMu.Lock()
 
-func cleanupInternal(conn *websocket.Conn, gameId string) {
-	room := rooms[gameId]
-	if room == nil {
+	room, exists := rooms[gameId]
+	if !exists || room == nil {
+		roomsMu.Unlock()
 		return
 	}
 
-	// Use defer to ensure atomic counters always decrement,
-	// regardless of where the function exits.
-	defer func() {
-		numberOfClientsConnected.Add(-1)
-		if numberOfClientsConnected.Load() < 0 {
-			numberOfClientsConnected.Store(0)
-		}
-		if numberOfClientsConnected.Load() == 0 {
-			packetsPerSecond.Store(0)
-		}
-	}()
+	// 2. Identify what needs to be closed, but DON'T close it yet
+	var toClose []*websocket.Conn
 
 	if room.Host == conn {
-		room.Host = nil
-		for uuid, ws := range room.Clients {
-			room.ClientsMutexes[ws].Lock()
-			ws.Close()
-			room.ClientsMutexes[ws].Unlock()
-			// Just delete directly, don't recurse
-			delete(room.Clients, uuid)
-			delete(room.ClientsReverseMap, ws)
-			delete(room.ClientsMutexes, ws) // Fixed leak
+		// If host leaves, we need to close all clients
+		for _, ws := range room.Clients {
+			toClose = append(toClose, ws)
 		}
 		delete(rooms, gameId)
-		fmt.Println("Host and room cleaned up")
+		fmt.Println("Host left, room deleted")
 	} else {
+		// If client leaves, just remove them from the map
 		uuid := room.ClientsReverseMap[conn]
 		delete(room.Clients, uuid)
 		delete(room.ClientsReverseMap, conn)
-		delete(room.ClientsMutexes, conn) // Fixed leak
-		fmt.Println("Client cleaned up:", uuid)
+		delete(room.ClientsMutexes, conn)
+		toClose = append(toClose, conn) // Add the client to the close list
+		fmt.Println("Client left:", uuid)
 	}
 
-}
+	// Update global counters
 
-func handleCleanup(conn *websocket.Conn, gameId string) {
+	// RELEASE THE LOCK before doing any network I/O (closing)
+	roomsMu.Unlock()
 
-	roomsMu.Lock()
-	defer roomsMu.Unlock()
-
-	cleanupInternal(conn, gameId) // Put in internal to not get stuck in deadlock
+	// NOW close the connections safely
+	for _, ws := range toClose {
+		numberOfClientsConnected.Add(-1)
+		ws.Close()
+	}
 }
 
 func handlePacket(packetData []byte, messageType int, ws *websocket.Conn, gameId string, isHost bool, allowanceLeftInBucket *int64) {
+
+	if messageType != websocket.BinaryMessage {
+		return
+	}
 
 	// Check CLIENTUUID_ prefix
 
@@ -395,10 +391,10 @@ func handlePacket(packetData []byte, messageType int, ws *websocket.Conn, gameId
 				roomsMu.RUnlock()
 
 				if targetClient != nil {
-					room.ClientsMutexes[targetClient].Lock()
+					//room.ClientsMutexes[targetClient].Lock()
 					targetClient.Close()
-					room.ClientsMutexes[targetClient].Unlock()
-					handleCleanup(targetClient, gameId)
+					//room.ClientsMutexes[targetClient].Unlock()
+					//handleCleanup(targetClient, gameId)
 				} else {
 					fmt.Println("Client not found when trying to close connection: ", string(uuid))
 				}
@@ -466,11 +462,18 @@ func handlePacket(packetData []byte, messageType int, ws *websocket.Conn, gameId
 
 		roomsMu.RLock()
 		room, exists := rooms[gameId]
-		roomsMu.RUnlock()
+
 		if !exists || room == nil {
+			roomsMu.RUnlock()
 			return
 		}
+		if rooms[gameId].Host == nil {
+			fmt.Println("Room has no host, cancelled forwarding")
+			return
+		}
+		roomsMu.RUnlock()
 		room.HostMu.Lock()
+
 		err := rooms[gameId].Host.WriteMessage(websocket.BinaryMessage, packetData)
 		room.HostMu.Unlock()
 
@@ -609,13 +612,9 @@ func relayForwardingLoop(conn *websocket.Conn, isHost bool, gameId string) {
 				}
 
 				if !isHost {
-					room.ClientsMutexes[conn].Lock()
 					conn.Close()
-					room.ClientsMutexes[conn].Unlock()
 				} else {
-					room.HostMu.Lock()
 					conn.Close()
-					room.HostMu.Unlock()
 				}
 
 				return
@@ -706,6 +705,17 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 	if isHost != "" {
 
 		roomsMu.Lock()
+
+		if room, exists := rooms[roomID]; exists && room != nil {
+			room.Host = conn
+			room.HostIP = r.RemoteAddr
+			room.HasHost = true
+		} else {
+			roomsMu.Unlock()
+
+			conn.Close()
+			return
+		}
 
 		rooms[roomID].Host = conn
 		rooms[roomID].HostIP = r.RemoteAddr
