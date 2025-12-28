@@ -3,6 +3,9 @@
 
 Here's a nice *technical* and very *nerdy* overview of StealthPipe.
 
+> [!NOTE]
+> Technical overview may be outdated from time to time!
+
 ### A Quick Summary
 
 StealthPipe creates parallel connections to the relay to optimize performance. It establishes one secure WebSocket connection (TLS/HTTPS) per player to the relay for sandboxing and stability, relaying all binary traffic to the other client. It does not (and cannot) discover what is inside each packet, since it only forwards the raw binary and does not manipulate packets. Also, by default, Minecraft traffic is end-to-end encrypted (unless using offline mode), which means StealthPipe cannot decode the traffic anyway.
@@ -28,22 +31,25 @@ In the description, it says "can work on networks that block peer-to-peer connec
 
 ```
 
-Broad Overview of the Handshaking Phase
-
-[HOST]               [RELAY]                 [CLIENT]
-  |                     |                        |
-  | 1. PING wakeup ---->|                        |
-  | 2. PoW Req (salt) ->|                        |
-  |<--- 3. Nonce & diff.|                        |
-  | 4. CREATE ROOM ---->|                        |
-  |<<<5. OPEN SIGNAL >>>|                        |
-  |                     |                        |
-  |                     |<---- 6. JOIN (Room ID) |
-  |<--7. SIGNAL REQ CONN|                        |
-  | 8. JOIN w/ ID    -->|                        |
-  |                     |                        |
-  |        [THREADS LINKED, TUNNEL FORMED]       |
-  |<================DATA STREAM=================>|
+  Overview of the Network Handshake phases
+  ┌─────────────────────────────────────────────────────┐
+  │ [HOST]                  [RELAY]           [CLIENT]  │
+  ├────────────────────────────┬────────────────────────┤
+  │                            │                        │
+  │ 1. PING wakeup ───────────>│                        │
+  │ 2. PoW Req (salt) ────────>│                        │
+  │<────────── 3. Nonce & diff.│                        │
+  │ 4. CREATE ROOM ───────────>│                        │
+  │<<<<<< 5. OPEN SIGNAL >>>>>>│                        │
+  │                            │                        │
+  │               [ Client joins the room ]             │
+  │                            │<──── 6. JOIN (Room ID) │
+  │<─────── 7. SIGNAL REQ CONN │                        │
+  │ 8. JOIN with ID ──────────>│                        │
+  │                            │                        │
+  │            [THREADS LINKED, TUNNEL FORMED]          │
+  │<=======================DATA STREAM=================>│
+  └─────────────────────────────────────────────────────┘
 ```
 
 **Summary of each step**
@@ -60,34 +66,45 @@ Broad Overview of the Handshaking Phase
 
 ### Overview of Networking
 
-StealthPipe's networking model is different from other similar mods, such as e4mc. I have illustrated both models here:
+StealthPipe's networking model is different from other similar mods, such as e4mc. 
+
+In these diagrams, **DATA** refers to sockets that send Minecraft packets, and **SIGNAL** refers to sockets that send signals needed for state management (such as detecting a new player trying to connect). However, in other implementations, DATA  is used as a signaling socket AND as a data socket.
+
+In StealthPipe, the DATA sockets are used strictly for Minecraft packets only, and the SIGNAL soocket is used for relay to host signaling only.
+
+I have illustrated both models here:
 
 ```
-Traditional Networking Infrastructure of Other Similar Mods
+Traditional Networking Model of Other Similar Mods
 
-[      ]                 [       ]
-[      ]                 [       ] <====DATA=====> [ Client 1 ]
-[      ]                 [       ] <====DATA=====> [ Client 2 ]
-[ HOST ] <====DATA=====> [ RELAY ] <====DATA=====> [ Client 3 ]
-[      ]                 [       ] <====DATA=====> [ Client 4 ]
-[      ]                 [       ]
+Host ───────────────────── Relay ──────────────────── Clients
 
-* May differ from mod to mod. Some mods use P2P instead.
+                         ┌───────┐
+                         │       │ <─── DATA ────> [ Client 1 ]
+┌──────┐                 │ RELAY │ <─── DATA ────> [ Client 2 ]
+│ HOST │ <─── DATA ────> │       │ <─── DATA ────> [ Client 3 ]
+└──────┘                 │       │ <─── DATA ────> [ Client 4 ]
+                         └───────┘
+
+* May differ from mod to mod. Some mods use P2P instead, which doesn't need a relay.
 ```
 
 Here's the networking model used in StealthPipe (version 3.0.0 and higher):
 
 ```
 
-StealthPipe Networking Infrastructure (Parallel Connections >=v3.0.0)
+StealthPipe Networking Model (Parallel Connections >=v3.0.0)
 
-[      ]                 [       ]
-[      ] <====DATA=====> [       ] <====DATA=====> [ Client 1 ]
-[      ] <====DATA=====> [       ] <====DATA=====> [ Client 2 ]
-[ HOST ] <====DATA=====> [ RELAY ] <====DATA=====> [ Client 3 ]
-[      ] <====DATA=====> [       ] <====DATA=====> [ Client 4 ]
-[      ]                 [       ]
-[      ] <---SIGNAL----> [       ]
+Host ───────────────────── Relay ──────────────────── Clients
+
+┌──────┐                 ┌───────┐
+│      │ <─── DATA ────> │       │ <─── DATA ────> [ Client 1 ]
+│      │ <─── DATA ────> │       │ <─── DATA ────> [ Client 2 ]
+│ HOST │ <─── DATA ────> │ RELAY │ <─── DATA ────> [ Client 3 ]
+│      │ <─── DATA ────> │       │ <─── DATA ────> [ Client 4 ]
+│      │ <== SIGNAL ===> │       │
+└──────┘                 └───────┘
+
 ```
 
 This allows the relay to process each client independently in multiple threads. Here's why this is likely more efficient:
@@ -97,6 +114,7 @@ Minecraft sends around 500 packets per second per player. If one player is conne
 In this architecture, the SIGNAL is used to notify the host when a new player joins, and asks it to create a DATA connection to the relay. Then, we link the host's DATA connection to the client's DATA connection. This means that even if we have 10 players sending 500 packets each, a single thread won't be handling them all, since each client has a corresponding host -> relay connection and a relay -> client connection, allowing each thread to only handle 500 packets each, improving performance. Also, there is no need for extra metadata, parsing or header since each thread already knows where to forward the packets.
 
 In the traditional single-connection model, if one player experiences a packet loss, the TCP window stalls for all players (Head-of-Line blocking). StealthPipe V3's parallel architecture ensures that one player's lag does not affect anyone else in the room.
+
 
 
 ### Handshake Protocol Questions
@@ -118,3 +136,62 @@ Source can be found in `RelayConnector.java` in `checkPoW` and `doProofOfWorkCha
 **Why not just use IP addresses?**
 
 IP-based limiting is ineffective in airports or hotels where 500 people may share a single Public IP. PoW allows us to rate-limit per-device without needing accounts or tracking user data.
+
+### Data Encapsulation & Relaying Model
+
+A simple diagram showing how data is relayed (nothing special here):
+
+```
+
+┌─────────────────────────────────────────────────┐
+│  HOST               RELAY               CLIENT  │
+├───────────────────────┬─────────────────────────┤
+│                       │                         │
+│─── Encrypted data ───>│                         │
+│      [Payload]        │─── Encrypted data ─────>│
+│                       │       [Payload]         │
+│                       │                         │
+│                       │<─── Encrypted data ─────│
+│<── Encrypted data ────│       [Payload]         │
+│      [Payload]        │                         │
+└───────────────────────┴─────────────────────────┘
+
+* Data is only encrypted by Minecraft if the client is using Online mode. 
+  But StealthPipe does not attempt to read, decrypt or decode the payload
+  wether it is encrypted or not.
+```
+
+Most tunneling mods that rely on relays use this model.
+
+### Hooking into the Netty Pipeline
+
+Each connection (a real one) has a Netty Channel associated with it. It is basically an abstraction of an underlying network socket, to put it simply. And each channel has a pipeline, a series of steps that a packet must go through to get serialized. To make StealthPipe work, it injects a custom `DuplexHandler` at the end of the pipeline to intercept the binary data before it proceeds to send it. Later, you'll also learn that we make use of Embedded Channels (basically fake channels) to trick Minecraft into think that it is a real network connection and route data through it. Embedded Channels are meant for testing, but for StealthPipe, they are used to pipe Minecraft packets to the relay.
+
+```
+
+Sending a packet:
+
+   [ External class ]
+           │
+           │                                         
+           V                                             
+Netty: [ Beginning ] ─────> [...] ─────> [ StealthPipe ] ─────> Sent
+      ( Packet class )                      ( Binary )          nowhere
+                                                │
+                                                │
+                                                V
+                                           Sent to Relay
+                                              via WSS       
+
+* [...] represents the series of steps to get the Packet class serialized, such as
+  encryption, packet encoding, and compression. So by the time StealthPipe gets
+  the binary, it is already encrypted by Minecraft, which means the data is
+  unreadable by StealthPipe.
+
+```
+
+StealthPipe injects its own `DuplexHandler` at the end of the pipeline to intercept the binary data and send it off to the relay. At that point, the data is already fully serialized, encrypted and ready to be sent off. StealthPipe clones the data and sends it to the relay. The original pipeline continues to its conclusion, but because the channel is 'fake' (Embedded), the data is simply discarded by the system after leaving the pipeline. Why fake channels? Because without them, Minecraft refuses to accept the connection or initiate its handshake.
+
+Receiving is basically the same thing, except the steps are reversed and StealthPipe injects data at the first step instead of intercepting at the end.
+
+On the server, one new fake channel is created per player, tricking Minecraft into believing they are actually connected to your LAN world. On the client, we trick Minecraft to use our fake `Connection` object which internally also uses a fake channel.
