@@ -62,7 +62,7 @@ In the description, it says "can work on networks that block peer-to-peer connec
 6. **Join with room ID**: Another client requests the relay to join a room ID
 7. **SIGNAL REQ CONN**: Relay forwards this request to the host by sending a REQUESTCONNECTION_[ROOM ID]_[REQUEST ID] where the host has to use this ID to create a DATA connection between the host and the relay.
 8. **Join with request ID**: Host creates a websocket connection between the host and relay. Relay links the incoming client DATA connection to the incoming host DATA connection with the ID.
-9. **THREADS LINKED**": Threads are successfully linked together and a tunnel is formed.
+9. **THREADS LINKED**: Threads are successfully linked together and a tunnel is formed.
 
 ### Overview of Networking
 
@@ -158,14 +158,14 @@ A simple diagram showing how data is relayed (nothing special here):
 
 * Data is only encrypted by Minecraft if the client is using Online mode. 
   But StealthPipe does not attempt to read, decrypt or decode the payload
-  wether it is encrypted or not.
+  whether it is encrypted or not.
 ```
 
 Most tunneling mods that rely on relays use this model.
 
 ### Hooking into the Netty Pipeline
 
-Each connection (a real one) has a Netty Channel associated with it. It is basically an abstraction of an underlying network socket, to put it simply. And each channel has a pipeline, a series of steps that a packet must go through to get serialized. To make StealthPipe work, it injects a custom `DuplexHandler` at the end of the pipeline to intercept the binary data before it proceeds to send it. Later, you'll also learn that we make use of Embedded Channels (basically fake channels) to trick Minecraft into think that it is a real network connection and route data through it. Embedded Channels are meant for testing, but for StealthPipe, they are used to pipe Minecraft packets to the relay.
+Each connection (a real one) has a Netty Channel associated with it. It is basically an abstraction of an underlying network socket, to put it simply. And each channel has a pipeline, a series of steps that a packet must go through to get serialized. To make StealthPipe work, it injects a custom `DuplexHandler` at the end of the pipeline to intercept the binary data before it proceeds to send it. Later, you'll also learn that we make use of Embedded Channels (basically fake channels) to trick Minecraft into thinking that it is a real network connection and route data through it. Embedded Channels are meant for testing, but for StealthPipe, they are used to pipe Minecraft packets to the relay.
 
 ```
 
