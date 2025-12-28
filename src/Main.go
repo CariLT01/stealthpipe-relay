@@ -7,12 +7,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	"os"
@@ -25,30 +25,20 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 )
 
 // --- CONFIGURATION ---
 
-/*
-
-Security features:
- - Proof of work when creating a new room, makes botting and filling all rooms extremely slow, also helps manage traffic and load
- - Bandwidth throttling prevents players from utilizing all of your server's monthly bandwidth
- - Maximum packet size prevents players from taking all of the relay's memory
-
-*/
-
 // Bandwidth throttling - protects server bandwidth usage
-var packetThrottlingLimitBaseline = int64(0.25 * 1024 * 1024) // A minimum of 0.25 MB with 0 clients, enough for keep-alive and handshake
-var packetThrottlingMs = 100                                  // 100ms per packet if throttled
-var packetThrottlingLimitBonus = int64(1.25 * 1024 * 1024)    // Extra 1.25 MB per client connected (sqrt, diminishing rewards)
-var packetThrottlingLimitMaximum = int64(4 * 1024 * 1024)     // Never give more than 4 MB/s bandwidth
-var packetThrottlingAllowance = int64(20 * 1024 * 1024)       // Maximum allow 20 MB/s once
-var packetThrottlingDisconnectDelayClient = 20_000            // Sustained 20 second use beyond allowed bandwidth, disconnect client
-var packetThrottlingDisconnectDelayHost = 60_000              // Sustained 60 second use beyond allowed bandwidth, disconnect host
+// These settings are optimized for 6 players on Vanilla or lightly-modded clients (standard for Fabric 1.21.11)
+var packetThrottlingOutboundHost = 1_500_000   // 1.5 MB/s of outbound size from host -> clients
+var packetThrottlingBurstOutbound = 12_000_000 // 12 MB of "burst" bandwidth, handles joining spike and initial chunk loading
+var packetThrottlingInboundHost = 300_000      // 300 KB/s of inbound size from clients -> host
+var packetThrottlingBurstInbound = 4_000_000   // 4 MB of "burst" bandwidth, handles sync spike
 
-// Packet size - prevents memory attacks
-var packetMaxSize = 2.1 * 1024 * 1024 // 2.1 MB before instantly disconnecting
+// Packet size
+var packetMaximumSize = 2_200_000 // 2.2 MB of maximum packet size
 
 // Proof of work difficulty - prevents brute force / creating thousands of rooms
 var difficulty6Threshold = 20   // Trigger difficulty 6 if exeeding 20 creation requests/s
@@ -60,11 +50,9 @@ var difficultyCooldown = 30_000 // Wait 30 seconds before dropping the difficult
 var roomEmptyCleanupDelay = int64(60_000)  // Cleanup an empty room if no host is connected after a full minute
 var roomIdleNoClientDelay = int64(300_000) // Cleanup an empty room if there were no clients for 5 minutes
 
-// Other
-var receiveIdleDelay = 50 // 50 ms idle delay between each packet when no clients are connected to the room
-
 // Stability and instance health
 var terminateWhenUnhealthy = true // Automatically terminate this instance to force a restart
+var signalSocketWait = 50         // wait 50ms before parsing next message in SIGNAL connection
 
 // --------------------------------------------------------------------------------------- //
 
@@ -79,6 +67,8 @@ type Room struct {
 	RequestedConnectionsMapMutex  *sync.RWMutex
 	ClientsToHostConnectionsMutex *sync.RWMutex
 	HostToClientsConnectionsMutex *sync.RWMutex
+	HostOutboundLimiter           *rate.Limiter
+	ClientsLimiter                *rate.Limiter
 	CreatedTime                   int64
 	HasHost                       bool
 }
@@ -373,7 +363,7 @@ func handleCleanup(conn *websocket.Conn, gameId string) {
 	}
 }
 
-func getCurrentBandwidth(gameId string) int64 {
+/*func getCurrentBandwidth(gameId string) int64 {
 	roomsMu.RLock()
 	numberOfClients := len(rooms[gameId].ClientsToHostConnections)
 	roomsMu.RUnlock()
@@ -382,7 +372,7 @@ func getCurrentBandwidth(gameId string) int64 {
 
 	return min(bandwidthCalculated, packetThrottlingLimitMaximum)
 
-}
+}*/
 
 func handleSignalRelayPacket(message []byte, conn *websocket.Conn) {
 
@@ -402,9 +392,13 @@ func signalRelayHandler(conn *websocket.Conn, gameId string) {
 
 	defer handleCleanup(conn, gameId)
 
-	mainBuf := make([]byte, 65536)
+	mainBuf := make([]byte, packetMaximumSize)
+	packetBuffer := bytes.NewBuffer(mainBuf)
 
 	for {
+
+		time.Sleep(time.Duration(signalSocketWait) * time.Millisecond)
+
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
 			fmt.Println("Got error: ", err.Error())
@@ -416,18 +410,13 @@ func signalRelayHandler(conn *websocket.Conn, gameId string) {
 			continue
 		}
 
-		packetBuffer := bytes.NewBuffer(mainBuf[:0])
-		limitReader := io.LimitReader(reader, 2200000)
+		packetBuffer.Reset()
 
-		n, err := packetBuffer.ReadFrom(limitReader)
-		if err != nil {
-			fmt.Println("Failed to read buffer: ", err.Error())
-			break
-		}
+		n, _ := io.Copy(packetBuffer, io.LimitReader(reader, int64(packetMaximumSize)+1))
 
-		if n > int64(packetMaxSize) {
-			fmt.Println("Packet exceeded Minecraft 2MB limit! Security Kick.")
-			break
+		if n > int64(packetMaximumSize) {
+			fmt.Println("Packet too large, kicking client.")
+			break // This exits the loop and triggers handleCleanup
 		}
 
 		packet := packetBuffer.Bytes()
@@ -518,7 +507,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	defer handleCleanup(conn, gameId)
 
-	mainBuf := make([]byte, 65536)
+	mainBuf := make([]byte, packetMaximumSize)
 
 	roomsMu.RLock()
 	room, exists := rooms[gameId]
@@ -539,6 +528,8 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 	if hostMu == nil {
 		return
 	}
+
+	inboundLimiter := room.ClientsLimiter
 
 	// Send signal
 
@@ -580,6 +571,8 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 		return
 	}
 
+	packetBuffer := bytes.NewBuffer(mainBuf)
+
 	for {
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
@@ -592,20 +585,22 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 			continue
 		}
 
-		packetBuffer := bytes.NewBuffer(mainBuf[:0])
-		limitReader := io.LimitReader(reader, 2200000)
+		packetBuffer.Reset()
 
-		n, err := packetBuffer.ReadFrom(limitReader)
-		if err != nil {
-			break
-		}
+		n, _ := io.Copy(packetBuffer, io.LimitReader(reader, int64(packetMaximumSize)+1))
 
-		if n > int64(packetMaxSize) {
-			fmt.Println("Packet exceeded Minecraft 2MB limit! Security Kick.")
+		if n > int64(packetMaximumSize) {
+			fmt.Println("Packet too large, kicking client.")
 			break
 		}
 
 		packet := packetBuffer.Bytes()
+
+		err = inboundLimiter.WaitN(context.Background(), len(packet))
+		if err != nil {
+			fmt.Println("Inbound rate limiting failed: ", err.Error())
+			return
+		}
 
 		// Forward
 
@@ -624,13 +619,41 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic in handleHostToRelayGameConnection:", r)
+			handleCleanup(conn, gameId)
+		}
+	}()
+
 	fmt.Println("new SERVER ws")
 
 	defer handleCleanup(conn, gameId)
 
-	mainBuf := make([]byte, 65536)
+	mainBuf := make([]byte, packetMaximumSize)
+	packetBuffer := bytes.NewBuffer(mainBuf)
+
+	roomsMu.RLock()
+	room, exists := rooms[gameId]
+	roomsMu.RUnlock()
+
+	if !exists || room == nil {
+		return
+	}
+
+	limiter := room.HostOutboundLimiter
+
+	room.ClientsToHostConnectionsMutex.RLock()
+	connection, exists := room.HostToClientsConnections[conn]
+	room.ClientsToHostConnectionsMutex.RUnlock()
+
+	if !exists {
+		fmt.Println("Connection not found")
+		return
+	}
 
 	for {
+
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
 			fmt.Println("Got error: ", err.Error())
@@ -642,17 +665,12 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 			continue
 		}
 
-		packetBuffer := bytes.NewBuffer(mainBuf[:0])
-		limitReader := io.LimitReader(reader, 2200000)
+		packetBuffer.Reset()
 
-		n, err := packetBuffer.ReadFrom(limitReader)
-		if err != nil {
-			fmt.Println("Failed to read buffer: ", err.Error())
-			break
-		}
+		n, err := io.Copy(packetBuffer, io.LimitReader(reader, int64(packetMaximumSize)+1))
 
-		if n > int64(packetMaxSize) {
-			fmt.Println("Packet exceeded Minecraft 2MB limit! Security Kick.")
+		if n > int64(packetMaximumSize) {
+			fmt.Println("Packet too large, kicking client.")
 			break
 		}
 
@@ -660,23 +678,15 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 
 		// fmt.Println("Forwarding " + strconv.Itoa(len(packet)) + " bytes to client")
 
-		// Forward
-
-		roomsMu.RLock()
-		room, exists := rooms[gameId]
-		roomsMu.RUnlock()
+		// Forward to client
 
 		if !exists {
 			fmt.Println("Room no longer exists")
 			return
 		}
-
-		room.ClientsToHostConnectionsMutex.RLock()
-		connection, exists := room.HostToClientsConnections[conn]
-		room.ClientsToHostConnectionsMutex.RUnlock()
-
-		if !exists {
-			fmt.Println("Connection not found")
+		err = limiter.WaitN(context.Background(), len(packet))
+		if err != nil {
+			fmt.Println("Rate limiting failed: " + err.Error())
 			return
 		}
 
@@ -969,6 +979,8 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 		CreatedTime:                   time.Now().UnixMilli(),
 		HasHost:                       false,
 		LastRoomFilledTime:            atomic.Int64{},
+		HostOutboundLimiter:           rate.NewLimiter(rate.Limit(packetThrottlingOutboundHost), packetThrottlingBurstOutbound),
+		ClientsLimiter:                rate.NewLimiter(rate.Limit(packetThrottlingInboundHost), packetThrottlingBurstInbound),
 	}
 
 	rooms[gameId].LastRoomFilledTime.Store(time.Now().UnixMilli())
@@ -1030,6 +1042,16 @@ func handleProofOfWorkEndpoint(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+
+	if os.Getenv("LIMITED_COMPUTE_MODE") != "" {
+		fmt.Println("warn: Limited compute mode enabled, remove LIMITED_COMPUTE_MODE env to disable")
+		fmt.Println("warn: Setting GOMAXPROCS to 1")
+		runtime.GOMAXPROCS(1)
+	}
+
+	if os.Getenv("SECRET_KEY") == "" {
+		fmt.Println("warn: Secret key is EMPTY, your relay is NOT SECURE!")
+	}
 
 	port := os.Getenv("PORT")
 	if port == "" {
