@@ -4,7 +4,7 @@
 Here's a nice *technical* and very *nerdy* overview of StealthPipe.
 
 > [!NOTE]
-> Technical overview may be outdated from time to time! Documentation updated for version **3.0.0**.
+> Technical overview may be outdated from time to time! Documentation updated for version **3.0.0**. Last modified: 2025-12-28.
 
 ### A Quick Summary
 
