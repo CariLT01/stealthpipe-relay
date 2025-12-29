@@ -4,9 +4,11 @@
 Here's a nice *technical* and very *nerdy* overview of StealthPipe.
 
 > [!NOTE]
-> Technical overview may be outdated from time to time!
+> Technical overview may be outdated from time to time! Documentation updated for version **3.0.0**.
 
 ### A Quick Summary
+
+Just in case you came here by accident, StealthPipe is a Minecraft mod that allows Open to LAN multiplayer to work on networks that block peer-to-peer connections and non-standard ports.
 
 StealthPipe creates parallel connections to the relay to optimize performance. It establishes one secure WebSocket connection (TLS/HTTPS) per player to the relay for sandboxing and stability, relaying all binary traffic to the other client. It does not (and cannot) discover what is inside each packet, since it only forwards the raw binary and does not manipulate packets. Also, by default, Minecraft traffic is end-to-end encrypted (unless using offline mode), which means StealthPipe cannot decode the traffic anyway.
 
@@ -15,8 +17,8 @@ StealthPipe creates parallel connections to the relay to optimize performance. I
 
 Let's start with the obvious. Why "StealthPipe"?
 
-- **Stealth**: chosen because it blends in with network traffic, essentially acting as stealthily. However, in most environments where non-standard ports and P2P connections are blocked, they are doing it for security reasons (prevent SSH or other attacks), not to block Minecraft. Read the other sections down below to learn more.
- - **Pipe**: it essentially means "tunnel", forwarding Minecraft data to a relay directly to another client.
+- **Stealth**: chosen because it blends in with web traffic, essentially acting stealthily. However, in most environments where non-standard ports and P2P connections are blocked, they are doing it for security reasons (prevent SSH or other attacks), not to block Minecraft. However, if the purpose of banning non-standard ports and P2P is to block gaming, you should respect these rules. Read the other sections down below to learn more.
+ - **Pipe**: it essentially means "tunnel" (as in a network tunnel), passing traffic through a relay before arriving at the other client's device instead of directly sending traffic to the other client.
 
 ### Clarifying the Description of StealthPipe
 
@@ -54,15 +56,15 @@ In the description, it says "can work on networks that block peer-to-peer connec
 
 **Summary of each step**
 
-1. **PING wakeup**: wake up the Render instance and get the round-trip time between the host and the relay.
-2. **PoW Req (salt)**: request a proof of work salt and token from the relay.
+1. **PING wakeup**: wake up the Render instance and get the game ping between another player and you (host). This is done by calling the `/ping` endpoint, which should return "OK" with the status code 200. If it does not return a status code of 200, it means that the instance is currently unhealthy. As a side note, the `/ping` endpoint is used as a "health check" endpoint. The round-trip time between you and the relay is measured by a `start` and an `end` variable, and the round-trip latency is calculated by subtracting `start` from `end`. Then, this number is multiplied by 2 to get the estimated latency between another player and you (the host), which is the game's ping. It definitely isn't very accurate, but it works for now.
+2. **PoW Req (salt)**: request a proof of work salt and token from the relay. The mod calls the `/pow` endpoint which returns a JWT token (used for validating if the challenge was actually given by the relay) that includes the salt, the difficulty, and the expiry time.
 3. **Nonce and difficulty**: Server returns the nonce, the difficulty and a validation token that will be used when creating the room.
-4. **Create room**: Using the nonce computed by the host and the proof of work validation token, the host can request the relay to create a new room.
-5. **Open SIGNAL**: Host and relay open a SIGNAL socket to communicate information such as new players trying to connect
+4. **Create room**: Using the nonce computed by the host and the proof of work validation token, the host can request the relay to create a new room. The endpoint for this is `/create`.
+5. **Open SIGNAL**: Host and relay open a SIGNAL socket to communicate information such as new players trying to connect.
 6. **Join with room ID**: Another client requests the relay to join a room ID
-7. **SIGNAL REQ CONN**: Relay forwards this request to the host by sending a REQUESTCONNECTION_[ROOM ID]_[REQUEST ID] where the host has to use this ID to create a DATA connection between the host and the relay.
+7. **SIGNAL REQ CONN**: Relay forwards this request to the host by sending a `REQUESTCONNECTION_[ROOM ID]_[REQUEST ID]` where the host has to use this ID to create a DATA connection between the host and the relay.
 8. **Join with request ID**: Host creates a websocket connection between the host and relay. Relay links the incoming client DATA connection to the incoming host DATA connection with the ID.
-9. **THREADS LINKED**: Threads are successfully linked together and a tunnel is formed.
+9. **THREADS LINKED**: Sockets are successfully linked together and a tunnel is formed.
 
 ### Overview of Networking
 
@@ -109,7 +111,7 @@ Host ───────────────────── Relay ─�
 
 This allows the relay to process each client independently in multiple threads. Here's why this is likely more efficient:
 
-Minecraft sends around 500 packets per second per player. If one player is connected to the room, 500 packets per second go through the DATA channel. However, if 10 players are connected, 5000 packets go through the DATA channel, which is significantly more for the relay to handle in a single thread. Also, WebSockets are hardly thread-safe, so all the clients sending 50 packets/second must also compete for a single lock to write to that single DATA socket going to the relay. Finally, when the HOST sends a message, it also needs to know WHERE to send this packet, which most likely requires extra parsing and header to determine which socket should receive this data.
+Minecraft sends around 500 packets per second per player. If one player is connected to the room, 500 packets per second go through the DATA channel. However, if 10 players are connected, 5000 packets go through the DATA channel, which is significantly more for the relay to handle in a single thread. Also, WebSockets are hardly thread-safe, so all the clients sending 50 packets/second must also compete for a single lock to write to that single DATA socket going to the relay. Finally, when the HOST sends a message, it also needs to know WHERE to send this packet, which most likely requires extra parsing and header to determine which socket should receive this data. The biggest downside to this architecture is a slightly higher use of RAM and more context switching on the CPU when the number of cores is limited.
 
 In this architecture, the SIGNAL is used to notify the host when a new player joins, and asks it to create a DATA connection to the relay. Then, we link the host's DATA connection to the client's DATA connection. This means that even if we have 10 players sending 500 packets each, a single thread won't be handling them all, since each client has a corresponding host -> relay connection and a relay -> client connection, allowing each thread to only handle 500 packets each, improving performance. Also, there is no need for extra metadata, parsing or header since each thread already knows where to forward the packets.
 
@@ -194,4 +196,4 @@ StealthPipe injects its own `DuplexHandler` at the end of the pipeline to interc
 
 Receiving is basically the same thing, except the steps are reversed and StealthPipe injects data at the first step instead of intercepting at the end.
 
-On the server, one new fake channel is created per player, tricking Minecraft into believing they are actually connected to your LAN world. On the client, we trick Minecraft to use our fake `Connection` object which internally also uses a fake channel.
+On the server, one new fake channel is created per player, tricking Minecraft into believing they are actually connected to your LAN world. On the client, we trick Minecraft to use our fake `Connection`Subtracting object which internally also uses a fake channel.
