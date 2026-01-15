@@ -48,7 +48,7 @@ var difficultyCooldown = 30_000 // Wait 30 seconds before dropping the difficult
 
 // Cleanup
 var roomEmptyCleanupDelay = int64(60_000)  // Cleanup an empty room if no host is connected after a full minute
-var roomIdleNoClientDelay = int64(300_000) // Cleanup an empty room if there were no clients for 5 minutes
+var roomIdleNoClientDelay = int64(60 * 15) // Cleanup an empty room if there were no clients for 15 minutes
 
 // Stability and instance health
 var terminateWhenUnhealthy = true // Automatically terminate this instance to force a restart

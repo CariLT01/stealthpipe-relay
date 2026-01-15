@@ -68,7 +68,7 @@ In the description, it says "can work on networks that block peer-to-peer connec
 
 ### Overview of Networking
 
-StealthPipe's networking model is different from other similar mods, such as e4mc. 
+StealthPipe's networking model uses a parallel connections model.
 
 In these diagrams, **DATA** refers to sockets that send Minecraft packets, and **SIGNAL** refers to sockets that send signals needed for state management (such as detecting a new player trying to connect). However, in other implementations, DATA  is used as a signaling socket AND as a data socket.
 
@@ -77,7 +77,7 @@ In StealthPipe, the DATA sockets are used strictly for Minecraft packets only, a
 I have illustrated both models here:
 
 ```
-Traditional Networking Model of Other Similar Mods
+Traditional Networking Model of Relays
 
 Host ───────────────────── Relay ──────────────────── Clients
 
@@ -116,6 +116,8 @@ Minecraft sends around 500 packets per second per player. If one player is conne
 In this architecture, the SIGNAL is used to notify the host when a new player joins, and asks it to create a DATA connection to the relay. Then, we link the host's DATA connection to the client's DATA connection. This means that even if we have 10 players sending 500 packets each, a single thread won't be handling them all, since each client has a corresponding host -> relay connection and a relay -> client connection, allowing each thread to only handle 500 packets each, improving performance. Also, there is no need for extra metadata, parsing or header since each thread already knows where to forward the packets.
 
 In the traditional single-connection model, if one player experiences a packet loss, the TCP window stalls for all players (Head-of-Line blocking). StealthPipe V3's parallel architecture ensures that one player's lag does not affect anyone else in the room.
+
+Suprisingly, e4mc uses a version of this parallel model. It uses QUIC (UDP) which allows it to have multiple streams without having multiple connections. UDP is faster than WebSockets (TCP) but it most likely won't work in the harsh environments StealthPipe needs to face, since QUIC looks like a VPN. In terms of raw performance, e4mc is likely faster if it works, but it may be throttled in some environments. In summary, they still use a single connection, but are able to create multiple streams natively with QUIC.
 
 
 
