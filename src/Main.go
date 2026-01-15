@@ -47,8 +47,8 @@ var difficultyCooldown = 30_000 // Wait 30 seconds before dropping the difficult
 // 67
 
 // Cleanup
-var roomEmptyCleanupDelay = int64(60_000)  // Cleanup an empty room if no host is connected after a full minute
-var roomIdleNoClientDelay = int64(60 * 15) // Cleanup an empty room if there were no clients for 15 minutes
+var roomEmptyCleanupDelay = int64(60_000)      // Cleanup an empty room if no host is connected after a full minute
+var roomIdleNoClientDelay = int64(60_000 * 15) // Cleanup an empty room if there were no clients for 15 minutes
 
 // Stability and instance health
 var terminateWhenUnhealthy = true // Automatically terminate this instance to force a restart
@@ -375,7 +375,7 @@ func handleCleanup(conn *websocket.Conn, gameId string) {
 }*/
 
 func handleSignalRelayPacket(message []byte, conn *websocket.Conn) {
-
+	// Do nothing at the moment
 }
 
 func signalRelayHandler(conn *websocket.Conn, gameId string) {
