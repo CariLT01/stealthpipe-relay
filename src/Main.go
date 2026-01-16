@@ -108,7 +108,11 @@ var (
 	isHealthy atomic.Bool
 )
 
-var logger = slog.Default()
+var opts = &slog.HandlerOptions{
+	AddSource: true, // include file:line
+}
+
+var logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
 
 func healthCheckGoroutines() bool {
 	count := runtime.NumGoroutine()
