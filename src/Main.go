@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"os"
@@ -107,10 +108,14 @@ var (
 	isHealthy atomic.Bool
 )
 
+var logger = slog.Default()
+
 func healthCheckGoroutines() bool {
 	count := runtime.NumGoroutine()
 	if count > 5000 { // Adjust based on your expected max players
-		fmt.Printf("UNHEALTHY: Goroutine leak detected (%d)\n", count)
+
+		logger.Warn("UNHEALTHY: Goroutine leak detected",
+			"count", count)
 		return false
 	}
 	return true
@@ -136,28 +141,22 @@ func deadlockWatchdog() {
 
 			isHealthy.Store(false)
 
-			fmt.Println("\n========================================")
-			fmt.Println("CRITICAL: DEADLOCK DETECTED ON roomsMu")
-			fmt.Println("Dumping all goroutine stacks:")
-			fmt.Println("========================================")
+			logger.Error("Deadlock detected on roomsMu. Dumping all goroutine stacks")
 
 			// Create a buffer large enough for many goroutines
 			buf := make([]byte, 1024*1024)
 			n := runtime.Stack(buf, true) // 'true' gets stacks for ALL goroutines
-			fmt.Printf("%s\n", buf[:n])
-
-			fmt.Println("========================================")
+			logger.Info("", "stack", buf[:n])
 
 		}
 
 		if !healthCheckGoroutines() {
-			fmt.Println("UNHEALTHY: Goroutine leak detected")
-			os.Exit(1)
+			logger.Error("Unhealthy instance: goroutine leak detected")
 		}
 
 		if !isHealthy.Load() {
 			if terminateWhenUnhealthy {
-				fmt.Println("Terminating instance to force a restart")
+				logger.Info("Terminating instance to force a restart")
 				os.Exit(1)
 			}
 		}
@@ -221,7 +220,7 @@ func cleanUnusedRooms() {
 				// Double-check existence and status (it might have changed during lock switch)
 				if room, exists := rooms[code]; exists && !room.HasHost {
 					delete(rooms, code)
-					fmt.Printf("Pruned ghost room: %s\n", code)
+					logger.Debug("Pruned ghost room: %s\n", code)
 				}
 			}
 			roomsMu.Unlock()
@@ -257,7 +256,7 @@ func cleanIdleRooms() {
 			// Close connections AFTER unlocking roomsMu
 			for _, conn := range toClose {
 				conn.Close()
-				fmt.Println("Closed idle connection")
+				logger.Debug("Closed idle connection")
 			}
 		}
 	}
@@ -297,7 +296,7 @@ func startCleanupLoop() {
 // IF NOT UNLOCKED BEFORE, A DEADLOCK WILL HAPPEN
 func handleCleanup(conn *websocket.Conn, gameId string) {
 
-	fmt.Println("Handle cleanup called on connection")
+	logger.Debug("Handle cleanup called on connection")
 
 	// 1. Acquire the lock ONLY to modify the map
 	roomsMu.Lock()
@@ -320,7 +319,7 @@ func handleCleanup(conn *websocket.Conn, gameId string) {
 		}
 
 		delete(rooms, gameId)
-		fmt.Println("Host left, room deleted")
+		logger.Info("Host left, room deleted")
 	} else {
 		// If client leaves, just remove them from the map
 		// uuid := room.ClientsReverseMap[conn]
@@ -355,7 +354,7 @@ func handleCleanup(conn *websocket.Conn, gameId string) {
 	// NOW close the connections safely
 	for _, ws := range toClose {
 		if ws == nil {
-			fmt.Println("Skipped null pointer websocket")
+			logger.Warn("Skipped null pointer websocket")
 			continue
 		}
 		numberOfClientsConnected.Add(-1)
@@ -380,7 +379,7 @@ func handleSignalRelayPacket(message []byte, conn *websocket.Conn) {
 
 func signalRelayHandler(conn *websocket.Conn, gameId string) {
 
-	fmt.Println("New SIGNAL ws")
+	logger.Info("New SIGNAL ws")
 
 	roomsMu.RLock()
 	room, exists := rooms[gameId]
@@ -401,12 +400,12 @@ func signalRelayHandler(conn *websocket.Conn, gameId string) {
 
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
-			fmt.Println("Got error: ", err.Error())
+			logger.Error("Got error: ", err.Error())
 			break
 		}
 
 		if messageType != websocket.BinaryMessage {
-			fmt.Println("Warning: Message not binary, skipping")
+			logger.Warn("Warning: Message not binary, skipping")
 			continue
 		}
 
@@ -415,7 +414,7 @@ func signalRelayHandler(conn *websocket.Conn, gameId string) {
 		n, _ := io.Copy(packetBuffer, io.LimitReader(reader, int64(packetMaximumSize)+1))
 
 		if n > int64(packetMaximumSize) {
-			fmt.Println("Packet too large, kicking client.")
+			logger.Info("Packet too large, kicking client.")
 			break // This exits the loop and triggers handleCleanup
 		}
 
@@ -462,12 +461,12 @@ func waitForHostConnectionAndReturnIt(request string, clientConn *websocket.Conn
 		roomsMu.RUnlock()
 
 		if !exists {
-			fmt.Println("Room ID does not exist")
+			logger.Error("Room ID does not exist", "roomId", gameId)
 			return nil
 		}
 
 		if room.Host == nil {
-			fmt.Println("Room has no host")
+			logger.Error("Room has no host", "roomId", gameId)
 			return nil
 		}
 
@@ -476,13 +475,13 @@ func waitForHostConnectionAndReturnIt(request string, clientConn *websocket.Conn
 
 			if !exists {
 				room.ClientsToHostConnectionsMutex.RUnlock()
-				fmt.Println("Host -> Relay connection not found")
+				// fmt.Println("Host -> Relay connection not found")
 				continue
 			}
 
 			if hostConn == nil {
 				room.ClientsToHostConnectionsMutex.RUnlock()
-				fmt.Println("Host -> Relay connection is nil")
+				// fmt.Println("Host -> Relay connection is nil")
 				continue
 			}
 
@@ -495,7 +494,7 @@ func waitForHostConnectionAndReturnIt(request string, clientConn *websocket.Conn
 
 		// Cancel if it's taking too long
 		if time.Since(start) > 1*time.Minute {
-			fmt.Println("Timed out waiting for host connection")
+			logger.Error("Timed out waiting for host connection")
 			return nil
 		}
 	}
@@ -503,7 +502,7 @@ func waitForHostConnectionAndReturnIt(request string, clientConn *websocket.Conn
 
 func clientRelayHandler(conn *websocket.Conn, gameId string) {
 
-	fmt.Println("new CLIENT ws")
+	logger.Info("new CLIENT ws")
 
 	defer handleCleanup(conn, gameId)
 
@@ -536,7 +535,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 	n, err := rand.Int(rand.Reader, big.NewInt(9999999))
 
 	if err != nil {
-		fmt.Println("Error occurred while generating random number")
+		logger.Error("Error occurred while generating random number")
 
 		return
 	}
@@ -545,7 +544,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 	messageBytes := []byte(message)
 
 	room.RequestedConnectionsMapMutex.Lock()
-	fmt.Println("Saved original message: " + message)
+	logger.Debug("Saved original message: " + message)
 	room.RequestedConnectionsMap[message] = conn
 	room.RequestedConnectionsMapMutex.Unlock()
 
@@ -558,16 +557,16 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 	hostMu.Unlock()
 
 	if err != nil {
-		fmt.Println("Error occurred while trying to write signal: ", err.Error())
+		logger.Error("Error occurred while trying to write signal: ", "error", err.Error())
 		return
 	}
 
-	fmt.Println("Waiting for signal response...")
+	logger.Info("Waiting for signal response...")
 
 	hostConn := waitForHostConnectionAndReturnIt(message, conn, gameId)
 
 	if hostConn == nil {
-		fmt.Println("Failed to get host connection")
+		logger.Error("Failed to get host connection", "message", message)
 		return
 	}
 
@@ -576,12 +575,12 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 	for {
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
-			fmt.Println("Got error: ", err.Error())
+			logger.Error("Got error: ", "error", err.Error())
 			break
 		}
 
 		if messageType != websocket.BinaryMessage {
-			fmt.Println("Warning: Message not binary, skipping")
+			logger.Warn("Warning: Message not binary, skipping")
 			continue
 		}
 
@@ -590,7 +589,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 		n, _ := io.Copy(packetBuffer, io.LimitReader(reader, int64(packetMaximumSize)+1))
 
 		if n > int64(packetMaximumSize) {
-			fmt.Println("Packet too large, kicking client.")
+			logger.Info("Packet too large, kicking client.")
 			break
 		}
 
@@ -598,7 +597,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 		err = inboundLimiter.WaitN(context.Background(), len(packet))
 		if err != nil {
-			fmt.Println("Inbound rate limiting failed: ", err.Error())
+			logger.Error("Inbound rate limiting failed: ", "error", err.Error())
 			return
 		}
 
@@ -609,7 +608,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 		err = hostConn.WriteMessage(websocket.BinaryMessage, packet)
 
 		if err != nil {
-			fmt.Println("Got error: ", err.Error())
+			logger.Error("Got error: ", "error", err.Error())
 			break
 		}
 
@@ -621,12 +620,12 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Recovered from panic in handleHostToRelayGameConnection:", r)
+			logger.Info("Recovered from panic in handleHostToRelayGameConnection:", "r", r)
 			handleCleanup(conn, gameId)
 		}
 	}()
 
-	fmt.Println("new SERVER ws")
+	logger.Info("new SERVER ws")
 
 	defer handleCleanup(conn, gameId)
 
@@ -648,7 +647,7 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 	room.ClientsToHostConnectionsMutex.RUnlock()
 
 	if !exists {
-		fmt.Println("Connection not found")
+		logger.Warn("Connection not found")
 		return
 	}
 
@@ -656,12 +655,12 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
-			fmt.Println("Got error: ", err.Error())
+			logger.Error("Got error: ", err.Error())
 			break
 		}
 
 		if messageType != websocket.BinaryMessage {
-			fmt.Println("Warning: Message not binary, skipping")
+			logger.Warn("Warning: Message not binary, skipping")
 			continue
 		}
 
@@ -670,7 +669,7 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 		n, err := io.Copy(packetBuffer, io.LimitReader(reader, int64(packetMaximumSize)+1))
 
 		if n > int64(packetMaximumSize) {
-			fmt.Println("Packet too large, kicking client.")
+			logger.Info("Packet too large, kicking client.")
 			break
 		}
 
@@ -681,12 +680,12 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 		// Forward to client
 
 		if !exists {
-			fmt.Println("Room no longer exists")
+			logger.Error("Room no longer exists")
 			return
 		}
 		err = limiter.WaitN(context.Background(), len(packet))
 		if err != nil {
-			fmt.Println("Rate limiting failed: " + err.Error())
+			logger.Error("Rate limiting failed: ", "error", err.Error())
 			return
 		}
 
@@ -699,7 +698,7 @@ func handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 
 func handleRelay(w http.ResponseWriter, r *http.Request) {
 
-	fmt.Println("new CONNECTION request")
+	logger.Info("new CONNECTION request")
 
 	params := r.URL.Query()
 	roomID := params.Get("id")
@@ -707,7 +706,7 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 	requestId := params.Get("request")
 
 	if roomID == "" {
-		fmt.Println("No room ID provided")
+		logger.Error("No room ID provided")
 		http.Error(w, "{\"ok\":false,\"message\":\"No room ID provided\"}", http.StatusBadRequest)
 		return
 	}
@@ -716,7 +715,7 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 
 	if rooms[roomID] == nil {
 		roomsMu.RUnlock()
-		fmt.Println("Room not found")
+		logger.Error("Room not found", "room", roomID)
 		http.Error(w, "{\"ok\":false,\"message\":\"Room not found\"}", http.StatusNotFound)
 		return
 	}
@@ -732,62 +731,62 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 	if isHost != "" {
 
 		if requestId != "" {
-			fmt.Println("Attempt to create parallel connection")
+			logger.Info("Attempt to create parallel connection")
 
-			fmt.Println("Aquiring roomsMu Lock")
+			logger.Debug("Aquiring roomsMu Lock")
 			roomsMu.RLock()
 			room, exists := rooms[roomID]
 			roomsMu.RUnlock()
 
-			fmt.Println("Released lock")
+			logger.Debug("Released lock")
 
 			if !exists {
-				fmt.Println("Room not found")
+				logger.Error("Room not found")
 				conn.Close()
 				return
 			}
 
-			fmt.Println("Aquire room RCM lock")
+			logger.Debug("Aquire room RCM lock")
 			room.RequestedConnectionsMapMutex.Lock()
 			clientConn, exists := room.RequestedConnectionsMap[requestId]
 
 			if !exists {
-				fmt.Println("Request ID not found: " + requestId)
+				logger.Error("Request ID not found: ", "request", requestId)
 				room.RequestedConnectionsMapMutex.Unlock()
 				conn.Close()
 				return
 			}
 
 			delete(room.RequestedConnectionsMap, requestId)
-			fmt.Println("Release room RCM lock")
+			logger.Debug("Release room RCM lock")
 			room.RequestedConnectionsMapMutex.Unlock()
 
-			fmt.Println("Acquire room CTHCM lock")
+			logger.Debug("Acquire room CTHCM lock")
 			room.ClientsToHostConnectionsMutex.Lock()
 			hostConn, exists := room.ClientsToHostConnections[clientConn]
 
 			if !exists {
-				fmt.Println("Client connection not found")
+				logger.Error("Client connection not found")
 				room.ClientsToHostConnectionsMutex.Unlock()
 				conn.Close()
 				return
 			}
 
 			if hostConn == nil {
-				fmt.Println("warn: Host connection is nil")
+				logger.Warn("warn: Host connection is nil")
 			}
 
 			room.ClientsToHostConnections[clientConn] = conn
-			fmt.Println("Release room CTHCM lock")
+			logger.Debug("Release room CTHCM lock")
 			room.ClientsToHostConnectionsMutex.Unlock()
 
-			fmt.Println("Acquire room HTCM lock")
+			logger.Debug("Acquire room HTCM lock")
 			room.HostToClientsConnectionsMutex.Lock()
 			room.HostToClientsConnections[conn] = clientConn
-			fmt.Println("Release room HTCM lock")
+			logger.Debug("Release room HTCM lock")
 			room.HostToClientsConnectionsMutex.Unlock()
 
-			fmt.Println("Done: Registered new host connection with request ID")
+			logger.Info("Done: Registered new host connection with request ID")
 
 			room.LastRoomFilledTime.Store(time.Now().UnixMilli())
 
@@ -796,13 +795,13 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 			return
 
 		} else {
-			fmt.Println("Joining as host, not client parallel connection")
+			logger.Info("Joining as host, not client parallel connection")
 
 			roomsMu.Lock()
 
 			if room, exists := rooms[roomID]; exists && room != nil {
 				if room.Host != nil {
-					fmt.Println("Room already has a host! Disconnecting")
+					logger.Error("Room already has a host! Disconnecting")
 					roomsMu.Unlock()
 					conn.Close()
 					return
@@ -813,7 +812,7 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 			} else {
 
 				roomsMu.Unlock()
-				fmt.Println("Room not found")
+				logger.Error("Room not found")
 				conn.Close()
 				return
 			}
@@ -832,10 +831,10 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 	numberOfClientsConnected.Add(1)
 
 	if isHost != "" {
-		fmt.Println("Joining as signal connection as host")
+		logger.Info("Joining as signal connection as host")
 		signalRelayHandler(conn, roomID)
 	} else {
-		fmt.Println("Joining as client")
+		logger.Info("Joining as client")
 		clientRelayHandler(conn, roomID)
 	}
 
@@ -889,12 +888,12 @@ func isProofOfWorkValid(token string, nonce int64) bool {
 	claims, err := verifyAndGetPayload(token, secretKey)
 
 	if err != nil {
-		fmt.Println("Invalid proof of work token: ", err.Error())
+		logger.Error("Invalid proof of work token: ", "error", err.Error())
 		return false
 	}
 
 	if isReplay(claims.Salt, claims.RegisteredClaims.ExpiresAt.Time.Unix()) {
-		fmt.Println("Invalid proof of work token: replay attack")
+		logger.Error("Invalid proof of work token: replay attack")
 		return false
 	}
 
@@ -908,7 +907,7 @@ func isProofOfWorkValid(token string, nonce int64) bool {
 	isValid := strings.HasPrefix(hashString, prefix)
 
 	if !isValid {
-		fmt.Println("Proof of work invalid: hash does not start with prefix")
+		logger.Error("Proof of work invalid: hash does not start with prefix")
 	}
 
 	return isValid
@@ -943,7 +942,7 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 	workValid := isProofOfWorkValid(token, int64(nonceInt))
 
 	if !workValid {
-		fmt.Println("Rejected proof of work token")
+		logger.Info("Rejected proof of work token")
 		http.Error(w, "{\"ok\":false,\"message\":\"Invalid proof of work\"}", http.StatusBadRequest)
 		return
 	}
@@ -1044,13 +1043,13 @@ func handleProofOfWorkEndpoint(w http.ResponseWriter, r *http.Request) {
 func main() {
 
 	if os.Getenv("LIMITED_COMPUTE_MODE") != "" {
-		fmt.Println("warn: Limited compute mode enabled, remove LIMITED_COMPUTE_MODE env to disable")
-		fmt.Println("warn: Setting GOMAXPROCS to 1")
+		logger.Warn("warn: Limited compute mode enabled, remove LIMITED_COMPUTE_MODE env to disable")
+		logger.Warn("warn: Setting GOMAXPROCS to 1")
 		runtime.GOMAXPROCS(1)
 	}
 
 	if os.Getenv("SECRET_KEY") == "" {
-		fmt.Println("warn: Secret key is EMPTY, your relay is NOT SECURE!")
+		logger.Warn("warn: Secret key is EMPTY, your relay is NOT SECURE!")
 	}
 
 	port := os.Getenv("PORT")
@@ -1073,7 +1072,7 @@ func main() {
 	http.HandleFunc("/stats", statsPathHandler)
 	http.HandleFunc("/pow", handleProofOfWorkEndpoint)
 	http.HandleFunc("/ping", pingPathHandler)
-	fmt.Println("Service: Server started")
+	logger.Info("Service: Server started")
 
 	/*go func() {
 		fmt.Println("Triggered test code")
