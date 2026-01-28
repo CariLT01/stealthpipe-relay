@@ -1,0 +1,1 @@
+go build -o main.exe ./src/Main.go

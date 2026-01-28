@@ -24,12 +24,16 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"golang.org/x/time/rate"
 )
 
 // --- CONFIGURATION ---
+
+// Versionning
+var RELAY_VERSION = "4.0.0" // Testing
 
 // Bandwidth throttling - protects server bandwidth usage
 // These settings are optimized for 6 players on Vanilla or lightly-modded clients (standard for Fabric 1.21.11)
@@ -708,6 +712,38 @@ func handleRelay(w http.ResponseWriter, r *http.Request) {
 	roomID := params.Get("id")
 	isHost := params.Get("host")
 	requestId := params.Get("request")
+	version := params.Get("version")
+
+	// Check client version
+
+	if version == "" {
+		logger.Error("Outdated client found")
+		http.Error(w, "{\"ok\":false,\"message\":\"Outdated client\"}", http.StatusUpgradeRequired)
+		return
+	}
+
+	relayVersionSem, err := semver.NewVersion(RELAY_VERSION)
+	if err != nil {
+		http.Error(w, "{\"ok\":false,\"message\":\"Server error\"}", http.StatusInternalServerError)
+		return
+	}
+
+	v, err := semver.NewVersion(version)
+
+	if err != nil {
+		http.Error(w, "{\"ok\":false,\"message\":\"Invalid client version\"}", http.StatusBadRequest)
+		return
+	}
+
+	if v.Major() > relayVersionSem.Major() {
+		http.Error(w, "{\"ok\":false,\"message\":\"Version mismatch, client too new\"}", http.StatusUpgradeRequired)
+		return
+	}
+
+	if v.Major() < relayVersionSem.Major() {
+		http.Error(w, "{\"ok\":false,\"message\":\"Outdated client, client too old\"}", http.StatusUpgradeRequired)
+		return
+	}
 
 	if roomID == "" {
 		logger.Error("No room ID provided")
@@ -1003,6 +1039,37 @@ func pingPathHandler(w http.ResponseWriter, r *http.Request) {
 	if !isHealthy.Load() {
 		// Broken, kill me
 		http.Error(w, "Instance unhealthy", http.StatusServiceUnavailable)
+		return
+	}
+
+	query := r.URL.Query() // url.Values
+
+	clientVersion := query.Get("version") // returns "" if not present
+
+	if clientVersion == "" {
+		http.Error(w, "Outdated client! Please update to: "+RELAY_VERSION+" to connect to this relay.", http.StatusUpgradeRequired)
+		return
+	}
+
+	v, err := semver.NewVersion(clientVersion)
+	if err != nil {
+		http.Error(w, "Invalid version provided", http.StatusBadRequest)
+		return
+	}
+
+	relayVersion, err := semver.NewVersion(RELAY_VERSION)
+	if err != nil {
+		http.Error(w, "Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if v.Major() > relayVersion.Major() {
+		http.Error(w, "Your client version is incompatible with this relay's version. You have: "+clientVersion+", the relay you are trying to connect to has: "+RELAY_VERSION, http.StatusUpgradeRequired)
+		return
+	}
+
+	if v.Major() < relayVersion.Major() {
+		http.Error(w, "Outdated client! Client version & relay version are incompatible. You must update to keep using this relay! Your client version is: "+clientVersion+", the relay you are trying to connect to has: "+RELAY_VERSION+". Please update!", http.StatusUpgradeRequired)
 		return
 	}
 
