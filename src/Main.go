@@ -1035,6 +1035,18 @@ func statsPathHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "{\"ok\":true,\"packetsPerSecond\":%d,\"clientsConnected\":%d}", packetsPerSecond.Load(), numberOfClientsConnected.Load())
 }
 
+func healthPathHandler(w http.ResponseWriter, r *http.Request) {
+	if !isHealthy.Load() {
+		// Broken, kill me
+		http.Error(w, "Instance unhealthy", http.StatusServiceUnavailable)
+		return
+	}
+
+	// OK
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+}
+
 func pingPathHandler(w http.ResponseWriter, r *http.Request) {
 	if !isHealthy.Load() {
 		// Broken, kill me
@@ -1143,6 +1155,7 @@ func main() {
 	http.HandleFunc("/stats", statsPathHandler)
 	http.HandleFunc("/pow", handleProofOfWorkEndpoint)
 	http.HandleFunc("/ping", pingPathHandler)
+	http.HandleFunc("/health", healthPathHandler)
 	logger.Info("Service: Server started")
 
 	/*go func() {
