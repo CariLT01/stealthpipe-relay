@@ -33,7 +33,7 @@ import (
 // --- CONFIGURATION ---
 
 // Versionning
-var RELAY_VERSION = "4.0.0" // Testing
+var RELAY_VERSION = "4.1.0" // Testing
 
 // Bandwidth throttling - protects server bandwidth usage
 // These settings are optimized for 6 players on Vanilla or lightly-modded clients (standard for Fabric 1.21.11)
@@ -899,6 +899,11 @@ type MyClaims struct {
 	jwt.RegisteredClaims        // This adds 'exp', 'iat', etc.
 }
 
+type ReuseJwtClaims struct {
+	Code string `json:"code"`
+	jwt.RegisteredClaims
+}
+
 func verifyAndGetPayload(tokenString string, secret []byte) (*MyClaims, error) {
 	// 1. Parse the token
 	token, err := jwt.ParseWithClaims(tokenString, &MyClaims{}, func(token *jwt.Token) (interface{}, error) {
@@ -916,6 +921,29 @@ func verifyAndGetPayload(tokenString string, secret []byte) (*MyClaims, error) {
 
 	// Extract the claims and check validity
 	if claims, ok := token.Claims.(*MyClaims); ok && token.Valid {
+		return claims, nil
+	}
+
+	return nil, fmt.Errorf("invalid token")
+}
+
+func verifyAndGetPayloadReuseToken(tokenString string, secret []byte) (*ReuseJwtClaims, error) {
+	// 1. Parse the token
+	token, err := jwt.ParseWithClaims(tokenString, &ReuseJwtClaims{}, func(token *jwt.Token) (interface{}, error) {
+		// Validate the algorithm is what you expect
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return secret, nil
+	})
+
+	// Check for errors (like expired or tampered tokens)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the claims and check validity
+	if claims, ok := token.Claims.(*ReuseJwtClaims); ok && token.Valid {
 		return claims, nil
 	}
 
@@ -954,6 +982,19 @@ func isProofOfWorkValid(token string, nonce int64) bool {
 
 }
 
+func isReuseTokenValid(token string) string {
+	secretKey := []byte(os.Getenv("SECRET_KEY"))
+
+	claims, err := verifyAndGetPayloadReuseToken(token, secretKey)
+
+	if err != nil {
+		logger.Error("Invalid token")
+		return ""
+	}
+	return claims.Code
+
+}
+
 func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 	gameId := ""
 	attempts := 0
@@ -961,6 +1002,7 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 	params := r.URL.Query()
 	token := params.Get("token")
 	nonce := params.Get("nonce")
+	existingCodeToken := params.Get("reuseToken")
 
 	if token == "" {
 		http.Error(w, "{\"ok\":false,\"message\":\"No token provided\"}", http.StatusBadRequest)
@@ -992,17 +1034,34 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 	roomsMu.Lock()
 	defer roomsMu.Unlock()
 
-	for {
-		gameId = generateRandomId()
-		if rooms[gameId] != nil {
-			attempts++
-		} else {
-			break
+	if existingCodeToken == "" {
+		for {
+			gameId = generateRandomId()
+			if rooms[gameId] != nil {
+				attempts++
+			} else {
+				break
+			}
+			if attempts >= 10000 {
+				http.Error(w, "Failed to get a random game ID in reasonable time", http.StatusServiceUnavailable)
+				return
+			}
 		}
-		if attempts >= 10000 {
-			http.Error(w, "Failed to get a random game ID in reasonable time", http.StatusServiceUnavailable)
+	} else {
+		existingCode := isReuseTokenValid(existingCodeToken)
+
+		if existingCode == "" {
+			http.Error(w, "Reuse token is not valid", http.StatusUnauthorized)
 			return
 		}
+
+		gameId = existingCode
+		if rooms[gameId] != nil {
+			http.Error(w, "Room code already used", http.StatusServiceUnavailable)
+			return
+		}
+
+		logger.Info("Successfully reused a room code using a reuse token")
 	}
 
 	rooms[gameId] = &Room{
@@ -1024,7 +1083,12 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 
 	rooms[gameId].LastRoomFilledTime.Store(time.Now().UnixMilli())
 
-	fmt.Fprintf(w, "{\"ok\":true,\"message\":%s}", gameId)
+	reuseToken := ""
+	if existingCodeToken == "" {
+		reuseToken = generateReuseToken(gameId)
+	}
+
+	fmt.Fprintf(w, "{\"ok\":true,\"message\":%s,\"reuseToken\":\"%s\"}", gameId, reuseToken)
 }
 
 func mainPathHandler(w http.ResponseWriter, r *http.Request) {
@@ -1115,6 +1179,23 @@ func generateProofOfWork() (string, string) {
 
 	return signedToken, salt
 
+}
+
+func generateReuseToken(code string) string {
+	secretKey := []byte(os.Getenv("SECRET_KEY"))
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"code": code,
+		"exp":  jwt.NewNumericDate(time.Now().Add(time.Hour * 1)),
+	})
+
+	signedToken, err := token.SignedString(secretKey)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return signedToken
 }
 
 func handleProofOfWorkEndpoint(w http.ResponseWriter, r *http.Request) {
