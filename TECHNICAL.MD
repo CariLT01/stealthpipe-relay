@@ -57,14 +57,14 @@ In the description, it says "can work on networks that block peer-to-peer connec
 **Summary of each step**
 
 1. **PING wakeup**: wake up the Render instance and get the game ping between another player and you (host). This is done by calling the `/ping` endpoint, which should return "OK" with the status code 200. If it does not return a status code of 200, it means that the instance is currently unhealthy. As a side note, the `/ping` endpoint is used as a "health check" endpoint. The round-trip time between you and the relay is measured by a `start` and an `end` variable, and the round-trip latency is calculated by subtracting `start` from `end`. Then, this number is multiplied by 2 to get the estimated latency between another player and you (the host), which is the game's ping. It definitely isn't very accurate, but it works for now.
-    > [!NOTE]
-    > As of version 4.0.0, StealthPipe will submit its current mod version to the relay, and the ping endpoint will either accept/reject version, and return an outdated message. The reason the `/ping` endpoint is used is to maintain backward compatibility, since `/ping` is the only endpoint where the client will print its message.
+> [!NOTE]
+> As of version 4.0.0, StealthPipe will submit its current mod version to the relay, and the ping endpoint will either accept/reject version, and return an outdated message. The reason the `/ping` endpoint is used is to maintain backward compatibility, since `/ping` is the only endpoint where the client will print its message.
 
 2. **PoW Req (salt)**: request a proof of work salt and token from the relay. The mod calls the `/pow` endpoint which returns a JWT token (used for validating if the challenge was actually given by the relay) that includes the salt, the difficulty, and the expiry time.
 3. **Nonce and difficulty**: Server returns the nonce, the difficulty and a validation token that will be used when creating the room.
 4. **Create room**: Using the nonce computed by the host and the proof of work validation token, the host can request the relay to create a new room. The endpoint for this is `/create`.
-    > [!NOTE]
-    > As of version 4.1.0, `/create` will return a reuseToken, which expires in 1 hour. It contains the token for allowing the client to re-use the same room code when it reconnects. This is used to allow the client to reconnect to the same room code when it unexpectedly disconnects because of the relay restarting.
+> [!NOTE]
+> As of version 4.1.0, `/create` will return a reuseToken, which expires in 1 hour. It contains the token for allowing the client to re-use the same room code when it reconnects. This is used to allow the client to reconnect to the same room code when it unexpectedly disconnects because of the relay restarting.
 
 5. **Open SIGNAL**: Host and relay open a SIGNAL socket to communicate information such as new players trying to connect.
 6. **Join with room ID**: Another client requests the relay to join a room ID
