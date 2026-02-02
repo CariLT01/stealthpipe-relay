@@ -12,6 +12,25 @@ Just in case you came here by accident, StealthPipe is a Minecraft mod that allo
 
 StealthPipe creates parallel connections to the relay to optimize performance. It establishes one secure WebSocket connection (TLS/HTTPS) per player to the relay for sandboxing and stability, relaying all binary traffic to the other client. It does not (and cannot) discover what is inside each packet, since it only forwards the raw binary and does not manipulate packets. Also, by default, Minecraft traffic is end-to-end encrypted (unless using offline mode), which means StealthPipe cannot decode the traffic anyway.
 
+### Major Versions Changelog
+
+Major versions in StealthPipe mean breaking changes or a new protocol version, not new fancy features.
+
+**Version 5.0.0**
+- Packet Batching, reducing PPS (packets per second) count by 10x. As of *2026-02-01*, this release is still experimental.
+
+**Version 4.0.0**
+- Added a version checker on the relay side and on the client side. This is mostly to ensure everyone is up-to-date and prevents ambiguous error messages due to out of date clients.
+
+**Version 3.0.0**
+- Parallel connections model allowing for multi-threaded processing of client & server side.
+
+**Version 2.0.0**
+- Adds proof-of-work validation to increase relay security and prevent abuse.
+
+**Version 1.0.0**
+- Initial release of StealthPipe.
+
 
 ### Why is the name of this mod StealthPipe?
 
