@@ -4,7 +4,7 @@
 Here's a nice *technical* and very *nerdy* overview of StealthPipe.
 
 > [!NOTE]
-> Technical overview may be outdated from time to time! Documentation updated for version **3.0.0**. Last modified: 2025-12-28.
+> Technical overview may be outdated from time to time! Documentation updated for version **5.0.0**. Last modified: 2026-02-01.
 
 ### A Quick Summary
 
@@ -57,14 +57,21 @@ In the description, it says "can work on networks that block peer-to-peer connec
 **Summary of each step**
 
 1. **PING wakeup**: wake up the Render instance and get the game ping between another player and you (host). This is done by calling the `/ping` endpoint, which should return "OK" with the status code 200. If it does not return a status code of 200, it means that the instance is currently unhealthy. As a side note, the `/ping` endpoint is used as a "health check" endpoint. The round-trip time between you and the relay is measured by a `start` and an `end` variable, and the round-trip latency is calculated by subtracting `start` from `end`. Then, this number is multiplied by 2 to get the estimated latency between another player and you (the host), which is the game's ping. It definitely isn't very accurate, but it works for now.
+    > [!NOTE]
+    > As of version 4.0.0, StealthPipe will submit its current mod version to the relay, and the ping endpoint will either accept/reject version, and return an outdated message.
+    > The reason the `/ping` endpoint is used is to maintain backward compatibility, since `/ping` is the only endpoint where the client will print its message.
+
 2. **PoW Req (salt)**: request a proof of work salt and token from the relay. The mod calls the `/pow` endpoint which returns a JWT token (used for validating if the challenge was actually given by the relay) that includes the salt, the difficulty, and the expiry time.
 3. **Nonce and difficulty**: Server returns the nonce, the difficulty and a validation token that will be used when creating the room.
 4. **Create room**: Using the nonce computed by the host and the proof of work validation token, the host can request the relay to create a new room. The endpoint for this is `/create`.
+    > [!NOTE] 
+    > As of version 4.1.0, `/create` will return a reuseToken, which expires in 1 hour. It contains the token for allowing the client to re-use the same room code when it reconnects. This is used to allow the client to reconnect to the same room code when it unexpectedly disconnects because of the relay restarting.
+
 5. **Open SIGNAL**: Host and relay open a SIGNAL socket to communicate information such as new players trying to connect.
 6. **Join with room ID**: Another client requests the relay to join a room ID
 7. **SIGNAL REQ CONN**: Relay forwards this request to the host by sending a `REQUESTCONNECTION_[ROOM ID]_[REQUEST ID]` where the host has to use this ID to create a DATA connection between the host and the relay.
 8. **Join with request ID**: Host creates a websocket connection between the host and relay. Relay links the incoming client DATA connection to the incoming host DATA connection with the ID.
-9. **THREADS LINKED**: Sockets are successfully linked together and a tunnel is formed.
+9.  **THREADS LINKED**: Sockets are successfully linked together and a tunnel is formed.
 
 ### Overview of Networking
 
@@ -119,11 +126,33 @@ In the traditional single-connection model, if one player experiences a packet l
 
 Suprisingly, e4mc uses a version of this parallel model. It uses QUIC (UDP) which allows it to have multiple streams without having multiple connections. UDP is faster than WebSockets (TCP) but it most likely won't work in the harsh environments StealthPipe needs to face, since QUIC looks like a VPN. In terms of raw performance, e4mc is likely faster if it works, but it may be throttled in some environments. In summary, they still use a single connection, but are able to create multiple streams natively with QUIC.
 
+### Packet Batching
+
+> [!NOTE]
+> This feature is only available in version 5.0.0 and onwards.
+
+In version 5.0.0, the packets are batched in 1ms intervals. What this means is that each time a packet is sent, it will queue it instead of sending it directly. Then, it will check if the last time a batch was sent was more than 1ms ago.
+
+If this is true, it will batch all queued packets together and send them in one batch. This simple method reduces the number of packets per second by 10 times. The reason such a simple method and a short timeframe of 1ms has such a great effect is because Minecraft frequently sends out bursts of packets in microseconds instead of many packets spread throughout the entire tick.
+
+This feature, however, adds latency that can vary from 8ms to over 30 milliseconds. On average, the added latency is around 20 milliseconds. This added ping does not depend on geographical location, but rather depends on pure luck from my testing.
+
+> [!WARNING]
+> Version 5.0.0 and the batching feature are still experimental. We will attempt to decrease the added latency caused by packet batching, but this is still an ongoing issue.
+
+### Handling Relay Restarts
+
+> [!NOTE]
+> Relay Restarts are only handled in version 4.1.0 and onwards.
+
+The default relay is hosted on Render.com on the free tier and that means that they will move the instance on their clusters when they feel like it. For normal HTTP applications, this is not a big issue because HTTP connections are not long-lasting and are closed immediately after the request is completed. However, for WebSockets, this is a bigger issue since they can last for many hours and are hard to transfer without a lot of load balancing infrastructure (which is far too complex and expensive for something like StealthPipe). These restarts are suprinsingly common (around every 10-15 minutes), so we need to find a solution that will handle relay restarts more gracefully instead of completely nuking the room and restarting from scratch each time as it gets annoying quick for the players.
+
+Before version 4.1.0, hosts are disconnected, which closes the whole room to close because the SIGNAL connection was lost. The host then had to rejoin the world and create a new room, which caused the creation of a new room code. After, they had to share this new link with the rest of the players, which caused a lot of headaches since relays can be restarted every 10 minutes.
+
+But in version 4.1.0 and onwards, the host will attempt to reconnect to the relay using the same room code. Clients will still be disconnected, but this is at least a step forward in the right direction. Like you probably saw, the server now returns a reuse token on the `create` endpoint. This allows the host to pass this token as an argument when creating a room code to tell the relay to reuse the same room code that it had used before if it hasn't been taken by someone else yet. This can be done infinitely until the reuse token expires (1 hour).
 
 
 ### Handshake Protocol Questions
-
-I know nothing's in order here, but yeah.
 
 **Why Proof of Work?**
 Since StealthPipe does not require any authentication, and the computational resources are rather limited, we require a proof of work to prevent bots or scripts from easily exceeding our computational budget. By requiring proof of work, the clients must "pay" by doing work before they can create a new room, slowing down scripts and bots tremendously.
@@ -199,3 +228,10 @@ StealthPipe injects its own `DuplexHandler` at the end of the pipeline to interc
 Receiving is basically the same thing, except the steps are reversed and StealthPipe injects data at the first step instead of intercepting at the end.
 
 On the server, one new fake channel is created per player, tricking Minecraft into believing they are actually connected to your LAN world. On the client, we trick Minecraft to use our fake `Connection`Subtracting object which internally also uses a fake channel.
+
+### What makes StealthPipe traffic indistinguishable from Web Traffic
+
+The three main reasons:
+  - Use of secure WebSockets (TLS) on port 443. This encrypts data inside it and makes it appear as a normal web application, making it opaque to all firewalls that don't use TLS termination.
+  - Packet Batching removes heuristics that are based on the number of packets sent per second and its frequency. It makes it appear as a normal web app.
+  - The custom binary format removes signatures for Minecraft's Hello packets.
