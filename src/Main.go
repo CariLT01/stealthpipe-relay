@@ -365,7 +365,7 @@ func handleCleanup(conn *websocket.Conn, gameId string) {
 			logger.Warn("Skipped null pointer websocket")
 			continue
 		}
-		numberOfClientsConnected.Add(-1)
+
 		ws.Close()
 	}
 }
@@ -398,6 +398,7 @@ func signalRelayHandler(conn *websocket.Conn, gameId string) {
 	}
 
 	defer handleCleanup(conn, gameId)
+	defer numberOfClientsConnected.Add(-1)
 
 	mainBuf := make([]byte, packetMaximumSize)
 	packetBuffer := bytes.NewBuffer(mainBuf)
@@ -513,6 +514,7 @@ func clientRelayHandler(conn *websocket.Conn, gameId string) {
 	logger.Info("new CLIENT ws")
 
 	defer handleCleanup(conn, gameId)
+	defer numberOfClientsConnected.Add(-1)
 
 	mainBuf := make([]byte, packetMaximumSize)
 
