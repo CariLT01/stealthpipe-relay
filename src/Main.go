@@ -381,8 +381,36 @@ func handleCleanup(conn *websocket.Conn, gameId string) {
 
 }*/
 
-func handleSignalRelayPacket(message []byte, conn *websocket.Conn) {
-	// Do nothing at the moment
+func handleSignalRelayPacket(message []byte, conn *websocket.Conn, gameId string) {
+	/*
+
+		bytes:
+		0 - keep-alive
+		1 - ping
+		2 - pong
+	*/
+
+	roomsMu.RLock()
+	room, exists := rooms[gameId]
+	roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	if len(message) == 0 {
+		return
+	}
+	packetType := message[0]
+
+	switch packetType {
+	// only act for ping, and return pong
+	case 0x01:
+		room.HostMu.Lock() // lock to prevent race condition
+		conn.WriteMessage(websocket.BinaryMessage, []byte{0x02})
+		room.HostMu.Unlock()
+	}
+
 }
 
 func signalRelayHandler(conn *websocket.Conn, gameId string) {
@@ -429,7 +457,7 @@ func signalRelayHandler(conn *websocket.Conn, gameId string) {
 
 		packet := packetBuffer.Bytes()
 
-		handleSignalRelayPacket(packet, conn)
+		handleSignalRelayPacket(packet, conn, gameId)
 	}
 
 }
@@ -1058,9 +1086,22 @@ func handleCreatePath(w http.ResponseWriter, r *http.Request) {
 		}
 
 		gameId = existingCode
-		if rooms[gameId] != nil {
-			http.Error(w, "Room code already used", http.StatusServiceUnavailable)
-			return
+		if oldRoom, exists := rooms[gameId]; exists {
+
+			logger.Info("room code used, client presented valid reuse token")
+			if rooms[gameId].Host != nil {
+				logger.Info("old client detected, evicting. new client presented a valid reuse token, and chance of collision is too thin.")
+				roomsMu.Unlock()     // unlock for cleanup
+				oldRoom.Host.Close() // close
+
+				// wait go scheduler
+				time.Sleep(50 * time.Millisecond) // give time to go scheduler
+
+				roomsMu.Lock() // acquire lock again
+			}
+
+			// double-check delete
+			delete(rooms, gameId) // we must delete, since we have the lock
 		}
 
 		logger.Info("Successfully reused a room code using a reuse token")
