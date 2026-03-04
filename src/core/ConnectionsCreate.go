@@ -77,9 +77,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			app.Logger.Info("Attempt to create parallel connection")
 
 			app.Logger.Debug("Aquiring roomsMu Lock")
-			app.RoomsMu.RLock()
-			room, exists := app.Rooms[roomID]
-			app.RoomsMu.RUnlock()
+			room, exists := app.GetRoomExists(roomID)
 
 			app.Logger.Debug("Released lock")
 

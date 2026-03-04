@@ -99,9 +99,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	mainBuf := make([]byte, app.Config.PacketMaximumSize)
 
-	app.RoomsMu.RLock()
-	room, exists := app.Rooms[gameId]
-	app.RoomsMu.RUnlock()
+	room, exists := app.GetRoomExists(gameId)
 
 	if !exists {
 		return
