@@ -49,37 +49,6 @@ type ServerData struct {
 	Config *ServerConfig
 }
 
-/*
-
-// Versionning
-var RELAY_VERSION = "4.1.0" // Testing
-
-// Bandwidth throttling - protects server bandwidth usage
-// These settings are optimized for 6 players on Vanilla or lightly-modded clients (standard for Fabric 1.21.11)
-var packetThrottlingOutboundHost = 1_500_000   // 1.5 MB/s of outbound size from host -> clients
-var packetThrottlingBurstOutbound = 12_000_000 // 12 MB of "burst" bandwidth, handles joining spike and initial chunk loading
-var packetThrottlingInboundHost = 300_000      // 300 KB/s of inbound size from clients -> host
-var packetThrottlingBurstInbound = 4_000_000   // 4 MB of "burst" bandwidth, handles sync spike
-
-// Packet size
-var packetMaximumSize = 2_200_000 // 2.2 MB of maximum packet size
-
-// Proof of work difficulty - prevents brute force / creating thousands of rooms
-var difficulty6Threshold = 20   // Trigger difficulty 6 if exeeding 20 creation requests/s
-var difficulty7Threshold = 100  // Trigger difficulty 7 if exceeding 100 creation requests/s
-var difficultyCooldown = 30_000 // Wait 30 seconds before dropping the difficulty
-// 67
-
-// Cleanup
-var roomEmptyCleanupDelay = int64(60_000)      // Cleanup an empty room if no host is connected after a full minute
-var roomIdleNoClientDelay = int64(60_000 * 15) // Cleanup an empty room if there were no clients for 15 minutes
-
-// Stability and instance health
-var terminateWhenUnhealthy = true // Automatically terminate this instance to force a restart
-var signalSocketWait = 50         // wait 50ms before parsing next message in SIGNAL connection
-
-*/
-
 type ServerConfig struct {
 	// Versioning
 	RelayVersion string
