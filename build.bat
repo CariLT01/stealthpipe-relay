@@ -1,1 +1,1 @@
-go build -o main.exe ./src/Main.go
+go build -o main.exe -v ./src/Main.go
