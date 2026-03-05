@@ -94,7 +94,7 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 		}
 
 		if existingCode == "676767" {
-			http.Error(w, "Aww man... this code can't be reused :(", http.StatusUnauthorized)
+			http.Error(w, "Aww man... this code can't be reused :( Please generate a new room code.", http.StatusUnauthorized)
 			return
 		}
 
