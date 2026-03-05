@@ -178,7 +178,7 @@ func generateReuseToken(code string) string {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"code": code,
-		"exp":  jwt.NewNumericDate(time.Now().Add(time.Hour * 1)),
+		"exp":  jwt.NewNumericDate(time.Now().Add(time.Hour * 3)),
 	})
 
 	signedToken, err := token.SignedString(secretKey)
