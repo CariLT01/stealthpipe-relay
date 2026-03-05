@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -52,18 +53,36 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 	defer app.RoomsMu.Unlock()
 
 	if existingCodeToken == "" {
-		for {
-			gameId = generateRandomId()
-			if app.Rooms[gameId] != nil {
-				attempts++
-			} else {
-				break
-			}
-			if attempts >= 10000 {
-				http.Error(w, "Failed to get a random game ID in reasonable time", http.StatusServiceUnavailable)
-				return
+
+		/*
+			random feature: 1/15 chance to generate 676767 code
+		*/
+
+		foundCode := false
+
+		if rand.Float32() < 0.067 {
+			gameId = "676767"
+			if app.Rooms[gameId] == nil {
+				// code is available for use
+				foundCode = true
 			}
 		}
+
+		if !foundCode {
+			for {
+				gameId = generateRandomId()
+				if app.Rooms[gameId] != nil {
+					attempts++
+				} else {
+					break
+				}
+				if attempts >= 10000 {
+					http.Error(w, "Failed to get a random game ID in reasonable time", http.StatusServiceUnavailable)
+					return
+				}
+			}
+		}
+
 	} else {
 		existingCode := IsReuseTokenValid(app, existingCodeToken)
 
