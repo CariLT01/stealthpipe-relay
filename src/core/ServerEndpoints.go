@@ -21,7 +21,7 @@ func (app *ServerData) StatsPathHandler(w http.ResponseWriter, r *http.Request) 
 
 func (app *ServerData) HealthPathHandler(w http.ResponseWriter, r *http.Request) {
 
-	LogRequest(app, r)
+	// LogRequest(app, r)
 
 	if !app.IsHealthy.Load() {
 		// Broken, kill me
