@@ -93,6 +93,11 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
+		if existingCode == "676767" {
+			http.Error(w, "Aww man... this code can't be reused :(", http.StatusUnauthorized)
+			return
+		}
+
 		gameId = existingCode
 		if oldRoom, exists := app.Rooms[gameId]; exists {
 
