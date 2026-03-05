@@ -98,7 +98,7 @@ func NewServerConfig() *ServerConfig {
 		TerminateWhenUnhealthy: true,
 		SignalSocketWait:       50,
 
-		reuseTokenExpiryHours: 1,
+		reuseTokenExpiryHours: 3,
 		powTokenExpiryMinutes: 5,
 	}
 }
