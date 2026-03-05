@@ -9,6 +9,8 @@ import (
 
 func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
+	LogRequest(app, r)
+
 	app.Logger.Info("new CONNECTION request")
 
 	params := r.URL.Query()

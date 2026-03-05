@@ -74,25 +74,32 @@ type ServerConfig struct {
 	// Stability and instance health
 	TerminateWhenUnhealthy bool
 	SignalSocketWait       int // milliseconds
+
+	// Tokens
+	reuseTokenExpiryHours int
+	powTokenExpiryMinutes int
 }
 
 func NewServerConfig() *ServerConfig {
 	return &ServerConfig{
-		RelayVersion:                  "4.1.0",
-		PacketThrottlingOutboundHost:  1_500_000,
-		PacketThrottlingBurstOutbound: 12_000_000,
-		PacketThrottlingInboundHost:   300_000,
-		PacketThrottlingBurstInbound:  4_000_000,
-		PacketMaximumSize:             2_200_000,
+		RelayVersion:                  "4.1.0",    // relay protocol version
+		PacketThrottlingOutboundHost:  1_500_000,  // 1.5 MB
+		PacketThrottlingBurstOutbound: 12_000_000, // 12 MB
+		PacketThrottlingInboundHost:   300_000,    // 300 KB
+		PacketThrottlingBurstInbound:  4_000_000,  // 4 MB
+		PacketMaximumSize:             2_200_000,  // 2.2 MB
 
-		Difficulty6Threshold: 20,
-		Difficulty7Threshold: 100,
-		DifficultyCooldown:   30_000,
+		Difficulty6Threshold: 20,     // 20 rps
+		Difficulty7Threshold: 100,    // 100 rps
+		DifficultyCooldown:   30_000, // milliseconds
 
-		RoomEmptyCleanupDelay:  60_000,
-		RoomIdleNoClientDelay:  60_000 * 15,
+		RoomEmptyCleanupDelay:  60_000,      // milliseconds
+		RoomIdleNoClientDelay:  60_000 * 15, // milliseconds
 		TerminateWhenUnhealthy: true,
 		SignalSocketWait:       50,
+
+		reuseTokenExpiryHours: 1,
+		powTokenExpiryMinutes: 5,
 	}
 }
 

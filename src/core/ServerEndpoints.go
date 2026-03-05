@@ -7,15 +7,22 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
-func MainPathHandler(w http.ResponseWriter, r *http.Request) {
+func (app *ServerData) MainPathHandler(w http.ResponseWriter, r *http.Request) {
+	LogRequest(app, r)
+
 	fmt.Fprintf(w, "Service is Online")
 }
 
 func (app *ServerData) StatsPathHandler(w http.ResponseWriter, r *http.Request) {
+	LogRequest(app, r)
+
 	fmt.Fprintf(w, "{\"ok\":true,\"packetsPerSecond\":%d,\"clientsConnected\":%d}", app.PacketsPerSecond.Load(), app.NumberOfClientsConnected.Load())
 }
 
 func (app *ServerData) HealthPathHandler(w http.ResponseWriter, r *http.Request) {
+
+	LogRequest(app, r)
+
 	if !app.IsHealthy.Load() {
 		// Broken, kill me
 		http.Error(w, "Instance unhealthy", http.StatusServiceUnavailable)
@@ -28,6 +35,9 @@ func (app *ServerData) HealthPathHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (app *ServerData) PingPathHandler(w http.ResponseWriter, r *http.Request) {
+
+	LogRequest(app, r)
+
 	if !app.IsHealthy.Load() {
 		// Broken, kill me
 		http.Error(w, "Instance unhealthy", http.StatusServiceUnavailable)
@@ -71,6 +81,9 @@ func (app *ServerData) PingPathHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *ServerData) HandleProofOfWorkEndpoint(w http.ResponseWriter, r *http.Request) {
+
+	LogRequest(app, r)
+
 	proofOfWork, salt := generateProofOfWork(app)
 
 	fmt.Fprintf(w, "{\"ok\":true,\"token\":\"%s\",\"salt\":\"%s\"}", proofOfWork, salt)

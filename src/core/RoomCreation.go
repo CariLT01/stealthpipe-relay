@@ -14,6 +14,8 @@ import (
 )
 
 func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) {
+
+	LogRequest(app, r)
 	gameId := ""
 	attempts := 0
 
@@ -134,7 +136,7 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 
 	reuseToken := ""
 	if existingCodeToken == "" {
-		reuseToken = generateReuseToken(gameId)
+		reuseToken = GenerateReuseToken(app, gameId)
 	}
 
 	fmt.Fprintf(w, "{\"ok\":true,\"message\":%s,\"reuseToken\":\"%s\"}", gameId, reuseToken)

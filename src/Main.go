@@ -56,7 +56,7 @@ func main() {
 
 	go core.DeadlockWatchdog(server)
 
-	http.HandleFunc("/", core.MainPathHandler)
+	http.HandleFunc("/", server.MainPathHandler)
 	http.HandleFunc("/create", server.HandleCreatePath)
 	http.HandleFunc("/join", server.HandleRelay)
 	http.HandleFunc("/stats", server.StatsPathHandler)

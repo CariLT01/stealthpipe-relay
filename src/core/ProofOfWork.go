@@ -78,29 +78,6 @@ func verifyAndGetPayload(tokenString string, secret []byte) (*MyClaims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
-func verifyAndGetPayloadReuseToken(tokenString string, secret []byte) (*ReuseJwtClaims, error) {
-	// 1. Parse the token
-	token, err := jwt.ParseWithClaims(tokenString, &ReuseJwtClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// Validate the algorithm is what you expect
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return secret, nil
-	})
-
-	// Check for errors (like expired or tampered tokens)
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract the claims and check validity
-	if claims, ok := token.Claims.(*ReuseJwtClaims); ok && token.Valid {
-		return claims, nil
-	}
-
-	return nil, fmt.Errorf("invalid token")
-}
-
 func IsProofOfWorkValid(app *ServerData, token string, nonce int64) bool {
 	secretKey := []byte(os.Getenv("SECRET_KEY"))
 
@@ -133,19 +110,6 @@ func IsProofOfWorkValid(app *ServerData, token string, nonce int64) bool {
 
 }
 
-func IsReuseTokenValid(app *ServerData, token string) string {
-	secretKey := []byte(os.Getenv("SECRET_KEY"))
-
-	claims, err := verifyAndGetPayloadReuseToken(token, secretKey)
-
-	if err != nil {
-		app.Logger.Error("Invalid token")
-		return ""
-	}
-	return claims.Code
-
-}
-
 func generateProofOfWork(app *ServerData) (string, string) {
 	secretKey := []byte(os.Getenv("SECRET_KEY"))
 
@@ -160,7 +124,7 @@ func generateProofOfWork(app *ServerData) (string, string) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"salt": salt,
 		"diff": app.CurrentDifficulty,
-		"exp":  jwt.NewNumericDate(time.Now().Add(time.Minute * 5)),
+		"exp":  jwt.NewNumericDate(time.Now().Add(time.Minute * time.Duration(app.Config.powTokenExpiryMinutes))),
 	})
 
 	signedToken, err := token.SignedString(secretKey)
@@ -171,21 +135,4 @@ func generateProofOfWork(app *ServerData) (string, string) {
 
 	return signedToken, salt
 
-}
-
-func generateReuseToken(code string) string {
-	secretKey := []byte(os.Getenv("SECRET_KEY"))
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"code": code,
-		"exp":  jwt.NewNumericDate(time.Now().Add(time.Hour * 3)),
-	})
-
-	signedToken, err := token.SignedString(secretKey)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return signedToken
 }
