@@ -139,7 +139,7 @@ func NewServer() *ServerData {
 		},
 		smallPool: &sync.Pool{
 			New: func() any {
-				return make([]byte, 32*1024)
+				return make([]byte, 64*1024)
 			},
 		},
 	}
