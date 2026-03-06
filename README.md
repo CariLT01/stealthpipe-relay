@@ -2,7 +2,7 @@
 
 *Portable, Multi-Threaded, Lightweight*
 
-![LoC](https://api.codetabs.com/v1/loc/?github=CariLT01/stealthpipe-mod)
+![LoC](https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/CariLT01/stealthpipe-mod/badge?style=flat&logoColor=white&color=c78aff&style=for-the-badge)
 This repository contains the StealthPipe relay and is licensed under the MIT License.
 
 ### Hosting the Relay
