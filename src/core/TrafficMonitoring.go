@@ -1,13 +1,11 @@
-package statistics
+package core
 
 import (
 	"sync/atomic"
 	"time"
-
-	"github.com/CariLT01/stealthPipeGoRelay/src/core"
 )
 
-func MonitorTraffic(app *core.ServerData) {
+func MonitorTraffic(app *ServerData) {
 	ticker := time.NewTicker(1 * time.Second)
 	for range ticker.C {
 		rps := atomic.SwapUint64(&app.HandshakeCounter, 0)

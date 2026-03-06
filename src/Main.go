@@ -7,9 +7,6 @@ package main
 
 import (
 	"github.com/CariLT01/stealthPipeGoRelay/src/core"
-	"github.com/CariLT01/stealthPipeGoRelay/src/maintenance"
-	"github.com/CariLT01/stealthPipeGoRelay/src/statistics"
-	"net/http"
 	"os"
 	"runtime"
 )
@@ -30,7 +27,7 @@ import (
 
 func main() {
 
-	server := core.NewServer()
+	server := core.NewServer(false)
 
 	if os.Getenv("LIMITED_COMPUTE_MODE") != "" {
 		server.Logger.Warn("warn: Limited compute mode enabled, remove LIMITED_COMPUTE_MODE env to disable")
@@ -42,42 +39,6 @@ func main() {
 		server.Logger.Warn("warn: Secret key is EMPTY, your relay is NOT SECURE!")
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "7860" // Default for Hugging Face or Local testing
-	}
-
-	server.Logger.Info("Using port", "port", 7860)
-
-	core.StartCleanupLoop(server)
-	go statistics.MonitorTraffic(server)
-	go maintenance.CleanUnusedRooms(server)
-	go maintenance.CleanIdleRooms(server)
-
-	go server.StatsPPSTicker()
-
-	server.IsHealthy.Store(true)
-
-	go core.DeadlockWatchdog(server)
-
-	http.HandleFunc("/", server.MainPathHandler)
-	http.HandleFunc("/create", server.HandleCreatePath)
-	http.HandleFunc("/join", server.HandleRelay)
-	http.HandleFunc("/stats", server.StatsPathHandler)
-	http.HandleFunc("/pow", server.HandleProofOfWorkEndpoint)
-	http.HandleFunc("/ping", server.PingPathHandler)
-	http.HandleFunc("/health", server.HealthPathHandler)
-	server.Logger.Info("Service: Server started")
-
-	/*go func() {
-		fmt.Println("Triggered test code")
-		// TEST CODE
-		roomsMu.Lock()
-		roomsMu.Lock()
-	}()*/
-
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		panic(err)
-	}
+	server.Serve()
 
 }

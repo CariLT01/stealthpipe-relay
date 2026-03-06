@@ -110,7 +110,7 @@ func IsProofOfWorkValid(app *ServerData, token string, nonce int64) bool {
 
 }
 
-func generateProofOfWork(app *ServerData) (string, string) {
+func GenerateProofOfWork(app *ServerData) (string, string) {
 	secretKey := []byte(os.Getenv("SECRET_KEY"))
 
 	timeSalt := time.Now().UnixMilli()

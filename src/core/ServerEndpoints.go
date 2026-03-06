@@ -84,7 +84,7 @@ func (app *ServerData) HandleProofOfWorkEndpoint(w http.ResponseWriter, r *http.
 
 	LogRequest(app, r)
 
-	proofOfWork, salt := generateProofOfWork(app)
+	proofOfWork, salt := GenerateProofOfWork(app)
 
 	fmt.Fprintf(w, "{\"ok\":true,\"token\":\"%s\",\"salt\":\"%s\"}", proofOfWork, salt)
 }

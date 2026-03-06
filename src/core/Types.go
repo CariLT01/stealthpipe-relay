@@ -2,6 +2,7 @@ package core
 
 import (
 	"log/slog"
+	"net/http"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -50,6 +51,10 @@ type ServerData struct {
 
 	packetPool *sync.Pool
 	smallPool  *sync.Pool
+
+	Slim bool
+
+	Mux *http.ServeMux
 }
 
 type ServerConfig struct {
@@ -114,7 +119,7 @@ var opts = &slog.HandlerOptions{
 
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
 
-func NewServer() *ServerData {
+func NewServer(slim bool) *ServerData {
 
 	config := NewServerConfig()
 
@@ -142,5 +147,8 @@ func NewServer() *ServerData {
 				return make([]byte, 64*1024)
 			},
 		},
+
+		Slim: slim,
+		Mux:  http.NewServeMux(),
 	}
 }

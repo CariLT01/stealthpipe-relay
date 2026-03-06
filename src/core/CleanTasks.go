@@ -1,13 +1,12 @@
-package maintenance
+package core
 
 import (
 	"time"
 
-	"github.com/CariLT01/stealthPipeGoRelay/src/core"
 	"github.com/gorilla/websocket"
 )
 
-func CleanUnusedRooms(app *core.ServerData) {
+func CleanUnusedRooms(app *ServerData) {
 	// 15 seconds is a good frequency for a "Pre-Host" check
 	ticker := time.NewTicker(15 * time.Second)
 
@@ -40,7 +39,7 @@ func CleanUnusedRooms(app *core.ServerData) {
 	}
 }
 
-func CleanIdleRooms(app *core.ServerData) {
+func CleanIdleRooms(app *ServerData) {
 	ticker := time.NewTicker(35 * time.Second)
 	for range ticker.C {
 		var toClose []*websocket.Conn
