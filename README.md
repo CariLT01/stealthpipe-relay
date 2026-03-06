@@ -2,6 +2,7 @@
 
 *Portable, Multi-Threaded, Lightweight*
 
+![LoC](https://api.codetabs.com/v1/loc/?github=CariLT01/stealthpipe-mod)
 This repository contains the StealthPipe relay and is licensed under the MIT License.
 
 ### Hosting the Relay
