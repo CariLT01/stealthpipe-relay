@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"io"
@@ -97,8 +96,6 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 	defer app.handleCleanup(conn, gameId)
 	defer app.NumberOfClientsConnected.Add(-1)
 
-	mainBuf := make([]byte, app.Config.PacketMaximumSize)
-
 	room, exists := app.GetRoomExists(gameId)
 
 	if !exists {
@@ -159,7 +156,8 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 		return
 	}
 
-	packetBuffer := bytes.NewBuffer(mainBuf)
+	streamingBuf := app.smallPool.Get().([]byte)
+	defer app.smallPool.Put(streamingBuf)
 
 	for {
 		messageType, reader, err := conn.NextReader()
@@ -173,18 +171,28 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 			continue
 		}
 
-		packetBuffer.Reset()
+		writer, err := hostConn.NextWriter(websocket.BinaryMessage)
+		if err != nil {
+			app.Logger.Error("get writer failed", "error", err)
+			break
+		}
 
-		n, _ := io.Copy(packetBuffer, io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1))
+		lr := io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1)
+		n, err := io.CopyBuffer(writer, lr, streamingBuf)
+		if err != nil && err != io.EOF {
+			break
+		}
 
 		if n > int64(app.Config.PacketMaximumSize) {
 			app.Logger.Info("Packet too large, kicking client.")
 			break
 		}
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			app.Logger.Error("Got error: ", "error", err.Error())
+			break
+		}
 
-		packet := packetBuffer.Bytes()
-
-		err = inboundLimiter.WaitN(context.Background(), len(packet))
+		err = inboundLimiter.WaitN(context.Background(), int(n))
 		if err != nil {
 			app.Logger.Error("Inbound rate limiting failed: ", "error", err.Error())
 			return
@@ -194,12 +202,14 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 		// fmt.Println("Forwarding " + strconv.Itoa(len(packet)) + " bytes to Server")
 
-		err = hostConn.WriteMessage(websocket.BinaryMessage, packet)
+		/* err = hostConn.WriteMessage(websocket.BinaryMessage, buf[:n])
 
 		if err != nil {
-			app.Logger.Error("Got error: ", "error", err.Error())
+			app.Logger.Error("Message write failed", "error", err.Error())
 			break
-		}
+		} */
+
+		writer.Close()
 
 	}
 

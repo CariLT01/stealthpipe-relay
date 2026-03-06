@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"context"
 	"io"
 
@@ -21,8 +20,8 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 
 	defer app.handleCleanup(conn, gameId)
 
-	mainBuf := make([]byte, app.Config.PacketMaximumSize)
-	packetBuffer := bytes.NewBuffer(mainBuf)
+	streamingBuf := app.smallPool.Get().([]byte)
+	defer app.smallPool.Put(streamingBuf)
 
 	app.RoomsMu.RLock()
 	room, exists := app.Rooms[gameId]
@@ -56,16 +55,28 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 			continue
 		}
 
-		packetBuffer.Reset()
+		writer, err := connection.NextWriter(websocket.BinaryMessage)
+		if err != nil {
+			app.Logger.Error("get writer failed", "error", err)
+			break
+		}
 
-		n, err := io.Copy(packetBuffer, io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1))
+		// packetBuffer.Reset()
+
+		lr := io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1)
+		n, err := io.CopyBuffer(writer, lr, streamingBuf)
+		if err != nil && err != io.EOF {
+			break
+		}
 
 		if n > int64(app.Config.PacketMaximumSize) {
 			app.Logger.Info("Packet too large, kicking client.")
 			break
 		}
-
-		packet := packetBuffer.Bytes()
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			app.Logger.Error("Got error: ", "error", err.Error())
+			break
+		}
 
 		// fmt.Println("Forwarding " + strconv.Itoa(len(packet)) + " bytes to client")
 
@@ -75,14 +86,21 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 			app.Logger.Error("Room no longer exists")
 			return
 		}
-		err = limiter.WaitN(context.Background(), len(packet))
+		err = limiter.WaitN(context.Background(), int(n))
 		if err != nil {
 			app.Logger.Error("Rate limiting failed: ", "error", err.Error())
 			return
 		}
 
 		// No need to lock, only this thread will write to the connection
-		connection.WriteMessage(websocket.BinaryMessage, packet)
+		/* err = connection.WriteMessage(websocket.BinaryMessage, buf[:n])
+
+		if err != nil {
+			app.Logger.Error("Message write failed: ", "error", err)
+			return
+		} */
+
+		writer.Close()
 
 	}
 

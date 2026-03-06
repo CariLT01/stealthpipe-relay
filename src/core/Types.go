@@ -47,6 +47,9 @@ type ServerData struct {
 	Logger *slog.Logger
 
 	Config *ServerConfig
+
+	packetPool *sync.Pool
+	smallPool  *sync.Pool
 }
 
 type ServerConfig struct {
@@ -58,6 +61,7 @@ type ServerConfig struct {
 	PacketThrottlingBurstOutbound int // burst bytes
 	PacketThrottlingInboundHost   int // bytes/sec from clients -> host
 	PacketThrottlingBurstInbound  int // burst bytes
+	SignalingMaximumPacketSize    int // maximum packet size in bytes in signal connection
 
 	// Packet size
 	PacketMaximumSize int // maximum packet size in bytes
@@ -72,8 +76,8 @@ type ServerConfig struct {
 	RoomIdleNoClientDelay int64 // milliseconds
 
 	// Stability and instance health
-	TerminateWhenUnhealthy bool
-	SignalSocketWait       int // milliseconds
+	TerminateWhenUnhealthy       bool
+	ReadDeadlineSecondsSignaling int
 
 	// Tokens
 	reuseTokenExpiryHours int
@@ -88,15 +92,16 @@ func NewServerConfig() *ServerConfig {
 		PacketThrottlingInboundHost:   300_000,    // 300 KB
 		PacketThrottlingBurstInbound:  4_000_000,  // 4 MB
 		PacketMaximumSize:             2_200_000,  // 2.2 MB
+		SignalingMaximumPacketSize:    50_000,     // 50 kb (generous)
 
 		Difficulty6Threshold: 20,     // 20 rps
 		Difficulty7Threshold: 100,    // 100 rps
 		DifficultyCooldown:   30_000, // milliseconds
 
-		RoomEmptyCleanupDelay:  60_000,      // milliseconds
-		RoomIdleNoClientDelay:  60_000 * 15, // milliseconds
-		TerminateWhenUnhealthy: true,
-		SignalSocketWait:       50,
+		RoomEmptyCleanupDelay:        60_000,      // milliseconds
+		RoomIdleNoClientDelay:        60_000 * 15, // milliseconds
+		TerminateWhenUnhealthy:       true,
+		ReadDeadlineSecondsSignaling: 30,
 
 		reuseTokenExpiryHours: 3,
 		powTokenExpiryMinutes: 5,
@@ -110,10 +115,13 @@ var opts = &slog.HandlerOptions{
 var logger = slog.New(slog.NewJSONHandler(os.Stdout, opts))
 
 func NewServer() *ServerData {
+
+	config := NewServerConfig()
+
 	return &ServerData{
 		Rooms:                    make(map[string]*Room),
 		RoomsMu:                  sync.RWMutex{},
-		Upgrader:                 websocket.Upgrader{ReadBufferSize: 65536, WriteBufferSize: 65536},
+		Upgrader:                 websocket.Upgrader{ReadBufferSize: 16384, WriteBufferSize: 16384},
 		LastTick:                 time.Now().UnixMilli(),
 		PacketCounter:            atomic.Int64{},
 		PacketsPerSecond:         atomic.Int64{},
@@ -123,6 +131,16 @@ func NewServer() *ServerData {
 		UsedSaltsMutex:           sync.Mutex{},
 		IsHealthy:                atomic.Bool{},
 		Logger:                   logger,
-		Config:                   NewServerConfig(),
+		Config:                   config,
+		packetPool: &sync.Pool{
+			New: func() any {
+				return make([]byte, config.PacketMaximumSize)
+			},
+		},
+		smallPool: &sync.Pool{
+			New: func() any {
+				return make([]byte, 32*1024)
+			},
+		},
 	}
 }

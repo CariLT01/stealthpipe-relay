@@ -1,10 +1,11 @@
 package core
 
 import (
-	"bytes"
-	"github.com/gorilla/websocket"
 	"io"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 )
 
 func handleSignalRelayPacket(app *ServerData, message []byte, conn *websocket.Conn, gameId string) {
@@ -54,12 +55,14 @@ func (app *ServerData) signalRelayHandler(conn *websocket.Conn, gameId string) {
 	defer app.handleCleanup(conn, gameId)
 	defer app.NumberOfClientsConnected.Add(-1)
 
-	mainBuf := make([]byte, app.Config.PacketMaximumSize)
-	packetBuffer := bytes.NewBuffer(mainBuf)
+	buf := app.packetPool.Get().([]byte)
+	defer app.packetPool.Put(buf[:cap(buf)])
+
+	signalLimiter := rate.NewLimiter(rate.Limit(2), 10)
+
+	conn.SetReadDeadline(time.Now().Add(time.Duration(app.Config.ReadDeadlineSecondsSignaling) * time.Second))
 
 	for {
-
-		time.Sleep(time.Duration(app.Config.SignalSocketWait) * time.Millisecond)
 
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
@@ -72,18 +75,29 @@ func (app *ServerData) signalRelayHandler(conn *websocket.Conn, gameId string) {
 			continue
 		}
 
-		packetBuffer.Reset()
+		lr := io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1)
+		n, err := io.ReadAtLeast(lr, buf, 1)
+		if err != nil && err != io.EOF {
+			break
+		}
 
-		n, _ := io.Copy(packetBuffer, io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1))
-
-		if n > int64(app.Config.PacketMaximumSize) {
+		if n > int(app.Config.SignalingMaximumPacketSize) {
 			app.Logger.Info("Packet too large, kicking client.")
 			break // This exits the loop and triggers handleCleanup
 		}
+		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+			app.Logger.Error("Got error: ", "error", err.Error())
+			break
+		}
 
-		packet := packetBuffer.Bytes()
+		if !signalLimiter.Allow() {
+			app.Logger.Warn("Abuse detected on signal relay, ending connection")
+			break
+		}
 
-		handleSignalRelayPacket(app, packet, conn, gameId)
+		handleSignalRelayPacket(app, buf[:n], conn, gameId)
+
+		conn.SetReadDeadline(time.Now().Add(time.Duration(app.Config.ReadDeadlineSecondsSignaling) * time.Second))
 	}
 
 }
