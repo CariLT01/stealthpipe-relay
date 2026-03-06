@@ -11,7 +11,7 @@ Hosting a StealthPipe relay yourself can help reduce latency and improve stabili
 2. Put your relay's URL into your StealthPipe's mod config in Mod Menu/Cloth Config and **every other player that wants to use your relay to join must also modify their own mod config** (Also remove the leading slash!)
 3. You're done!
 
-Replace YOUR_PORT to the port required by your service provider. (Default is 7860).
+Replace YOUR_PORT with the port required by your service provider. (Default is 7860).
 
 > [!IMPORTANT]
 > **Very very important**: Do not forget to set your secret key to something super secret and secure!
