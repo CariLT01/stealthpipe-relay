@@ -1,0 +1,1 @@
+go build -o bench.exe -v ./src/Main.go

@@ -102,6 +102,8 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 
 		writer.Close()
 
+		app.PacketCounter.Add(1)
+
 	}
 
 }

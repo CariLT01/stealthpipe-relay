@@ -144,5 +144,5 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 		reuseToken = GenerateReuseToken(app, gameId)
 	}
 
-	fmt.Fprintf(w, "{\"ok\":true,\"message\":%s,\"reuseToken\":\"%s\"}", gameId, reuseToken)
+	fmt.Fprintf(w, "{\"ok\":true,\"message\":\"%s\",\"reuseToken\":\"%s\"}", gameId, reuseToken)
 }

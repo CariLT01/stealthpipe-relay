@@ -99,18 +99,24 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 	room, exists := app.GetRoomExists(gameId)
 
 	if !exists {
+		app.Logger.Error("Room ID does not exist", "roomId", gameId)
+		conn.Close()
 		return
 	}
 
 	host := room.Host
 
 	if host == nil {
+		app.Logger.Error("Room has no host", "roomId", gameId)
+		conn.Close()
 		return
 	}
 
 	hostMu := room.HostMu
 
 	if hostMu == nil {
+		app.Logger.Error("Room has no host mutex", "roomId", gameId)
+		conn.Close()
 		return
 	}
 
@@ -210,6 +216,8 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 		} */
 
 		writer.Close()
+
+		app.PacketCounter.Add(1)
 
 	}
 

@@ -47,10 +47,14 @@ func main() {
 		port = "7860" // Default for Hugging Face or Local testing
 	}
 
+	server.Logger.Info("Using port", "port", 7860)
+
 	core.StartCleanupLoop(server)
 	go statistics.MonitorTraffic(server)
 	go maintenance.CleanUnusedRooms(server)
 	go maintenance.CleanIdleRooms(server)
+
+	go server.StatsPPSTicker()
 
 	server.IsHealthy.Store(true)
 
