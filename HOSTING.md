@@ -2,92 +2,33 @@
 
 Hosting a StealthPipe relay yourself can help reduce latency and improve stability.
 
-The exact steps depend on your server provider, but the general process is:
+**Quick Steps**
 
-1. Copy the following files to your server:
-   - `Dockerfile`
-   - All files under `src/`  
-2. Set up the Docker container if your provider requires it. Using Docker is recommended, but you can also run it without Docker (though this may cause more issues). You can ask an AI assistant for help if needed.  
-3. If your provider allows choosing a server location, pick the one closest to you to reduce latency and improve connection speed.  
+1. Run `docker run -d -p YOUR_PORT:YOUR_PORT \
+  -e PORT=YOUR_PORT \
+  -e SECRET_KEY=your_super_secret_key \
+  --name stealth-relay 0999847695359/stealthpipe-relay:v5.1.3`
+2. Put your relay's URL into your StealthPipe's mod config in Mod Menu/Cloth Config and **every other player that wants to use your relay to join must also modify their own mod config** (Also remove the leading slash!)
+3. You're done!
 
-Of course, you may always use the EXE file in the repository, but this is not recommended for production.
-
-StealthPipe Relay updates frequently, so you will need to re-upload the files to your server to stay current.
+Replace YOUR_PORT to the port required by your service provider. (Default is 7860).
 
 > [!IMPORTANT]
-> **Very very important**: Do not forget to set SECRET_KEY in environment variables in the provider! The steps depend on the specific provider you are using to host this on, but if you don't set it, it will be left empty and easily exploitable!
+> **Very very important**: Do not forget to set your secret key to something super secret and secure!
 
-### Security Features (and how to disable them)
+### Security Features and config
 
 The server includes some basic security features to prevent bots from abusing the relay. It includes:
 - Proof of Work for creating a session
 - Packet size limit and bandwidth throttling (most providers have a limited GB/month throughput)
 
-To disable them, modify the variables at the top of the source code.
+The server config is in **src/core/Types.go** near the bottom.
 
 ## Hosting on Providers
 
-Here are some free platforms to host the relay on:
+On most providers, you *can* use the docker pull command directly (or use their fancy user interface to browse through the registry). *However*, on some other service providers, you *might* have to upload the files one by one by yourself. Just upload all the files, compile the source code and run the final binary.
 
-### Hosting on Render
-
-Render is great platform for personal use. Here are its limitations (free plan):
-- Server pauses after 15 minutes of inactivity. This has a minimal impact on your playing experience, it starts within 15 seconds and the mod has retry logic to account for this.
-- 100 GB/month outbound bandwidth. This is fine for personal use with a couple of friends.
-- You are only given 0.1 CPUs. Again, this is fine when you're playing with less than 10 players.
-
-**Steps**
-
-Approximate steps to host on Render:
-
-1. Go on render.com and create an account
-2. It will require you to link to the GitHub repository. You have two options:
-    - Link directly to the public relay repository. Your server will automatically update when the main relay updates.
-    - You clone the public relay repository and then link to your repository instead. This allows you to modify the config and modify the relay, but it will not update automatically.
-3. You can choose the server's location, choose the one that's closest to you
-4. Configure everything else like name, etc.
-5. After you're done, click deploy and access it via the given URL.
-
-### Hosting on HuggingFace Spaces
-
-Unlike Render, HuggingFace does not have a bandwidth limit and has an incredible amount of RAM and CPU offered to you for free (2 vCPUs and 18 GB of RAM). However, the relay process needs less than 32 MB of RAM and can run on less than 0.1 CPU for personal use.
-
-> [!NOTE]
-> If your network blocks domains ending in `.hf.space`, consider using another provider, like Oracle. Oracle allows more flexibility with domain names, though you may need to purchase one separately.
+StealthPipe relay is completely stateless, so it can be containerized efficiently and is really cheap to host.
 
 > [!WARNING]
-> **Important**: Hosting relays on HF might be against their Terms of Service! It's recommended to choose another provider for a more stable experience. Host this relay on HF space at your own risk. They sweep spaces every few months.
-
-**Steps**
-
-1. Log in or create a HuggingFace account.  
-2. Click your profile picture (top right) and select **New Space** from the dropdown.  
-3. Choose a name for your space. Avoid spaces or special characters.  
-4. In your space, go to the **Files** tab at the top right.  
-5. Click **Contribute**, then select **Upload files**.  
-6. Upload the required files (`Dockerfile` and `src/*`).  
-7. The Docker container will build automatically. Wait until the status changes to **Running**.  
-8. Once running, access your relay at:  
-https://[Your HuggingFace Username]-[Your Space Name].hf.space
-
-If you run into issues, an AI assistant can help troubleshoot. Official support is not available 24/7.
-
-### Hosting on a VPS
-
-It's possible to host this on a service like Oracle, which provides a lot of computing power for free. However, you will have to give your financial information to Oracle so they can verify your identity (and charge you while you're not looking lol).
-
-The steps are almost the same as the previous providers. Use an AI assistant to help you out if needed.
-
-### Hosting on AWS
-
-Not recommended, you might wake up to a bill the price of a house because you forgot to turn off an AWS instance.
-
-If you really want to host it on AWS, the steps are almost the same as the previous providers. Use an AI assistant to help you out if needed.
-
-### Cloudflare Tunnel
-
-This one is special, because you host the relay at home and you use Cloudflare Tunnels to make it available on the web. It also protects you from DDoS and it's completely free. However, you will need to buy a domain for your relay, which costs a few dollars a year. Unfortunately, it's really hard to get a free domain today, probably due to the crumbling economy.
-
-### End
-
-Unfortunately, not a lot of free hosting services exist today. If you want the best option that balances compute and is free, pick HuggingFace spaces (although you might get banned).
+> You must host this on a server that is accessible via the Internet! If you host this in your own home, your friends might not be able to connect to it without port forwarding!
