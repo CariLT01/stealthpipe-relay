@@ -220,9 +220,15 @@ func NewServer(slim bool, ext ServerConstructorExtraConfig) *ServerData {
 
 		// check for is prod
 
-		serviceName := "relay-service-staging"
+		serviceNameSuffix := os.Getenv("SERVICE_NAME")
+
+		if serviceNameSuffix == "" {
+			serviceNameSuffix = "default"
+		}
+
+		serviceName := "relay-service-staging-" + serviceNameSuffix
 		if os.Getenv("PRODUCTION") != "" {
-			serviceName = "relay-service-prod"
+			serviceName = "relay-service-prod-" + serviceNameSuffix
 		}
 
 		res, err = resource.Merge(
