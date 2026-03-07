@@ -53,6 +53,7 @@ type ServerStatistics struct {
 	numberOfClientsConnected metric.Int64Gauge
 	requestsPerSecond        metric.Int64Counter
 	bandwidth                metric.Int64Counter
+	packetProcessingTime     metric.Float64Histogram
 }
 
 type ServerData struct {
@@ -172,6 +173,7 @@ func NewServerStatistics(meter metric.Meter) *ServerStatistics {
 	numberOfClientsMeter, err := realMeter.Int64Gauge("clients_connected")
 	bandwidthMeter, err := realMeter.Int64Counter("bandwidth")
 	requestsPerSecondMeter, err := realMeter.Int64Counter("requests_per_second")
+	packetProcessingTimeMeter, err := realMeter.Float64Histogram("packet_processing_time", metric.WithUnit("ms"), metric.WithDescription("Time it takes from each packet going in and coming out"))
 
 	if err != nil {
 
@@ -182,6 +184,7 @@ func NewServerStatistics(meter metric.Meter) *ServerStatistics {
 		numberOfClientsConnected: numberOfClientsMeter,
 		bandwidth:                bandwidthMeter,
 		requestsPerSecond:        requestsPerSecondMeter,
+		packetProcessingTime:     packetProcessingTimeMeter,
 	}
 }
 

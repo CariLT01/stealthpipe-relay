@@ -170,6 +170,9 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	for {
 		messageType, reader, err := conn.NextReader()
+
+		start := time.Now()
+
 		if err != nil {
 			app.Logger.Error("Got error: ", "error", err.Error())
 			break
@@ -225,6 +228,10 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 			attribute.String("flow", "from_client"),
 		))
 		app.Statistics.bandwidth.Add(app.Ctx, n, metric.WithAttributes(
+			attribute.String("flow", "from_client"),
+		))
+		duration := float64(time.Since(start).Nanoseconds()) / 1e6
+		app.Statistics.packetProcessingTime.Record(app.Ctx, duration, metric.WithAttributes(
 			attribute.String("flow", "from_client"),
 		))
 

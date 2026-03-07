@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"go.opentelemetry.io/otel/attribute"
@@ -47,6 +48,9 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 	for {
 
 		messageType, reader, err := conn.NextReader()
+
+		start := time.Now()
+
 		if err != nil {
 			app.Logger.Error("Got error", "error", err.Error())
 			break
@@ -109,6 +113,10 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 			attribute.String("flow", "from_host"),
 		))
 		app.Statistics.bandwidth.Add(app.Ctx, n, metric.WithAttributes(
+			attribute.String("flow", "from_host"),
+		))
+		duration := float64(time.Since(start).Nanoseconds()) / 1e6
+		app.Statistics.packetProcessingTime.Record(app.Ctx, duration, metric.WithAttributes(
 			attribute.String("flow", "from_host"),
 		))
 
