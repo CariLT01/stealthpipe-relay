@@ -12,6 +12,9 @@ func (benchmarker *Benchmarker) HandleClientToRelayConnectionReadLoop(conn *webs
 
 	for {
 		_, _, err := conn.ReadMessage()
+
+		benchmarker.PacketsCounterRecv.Add(1)
+
 		if err != nil {
 			benchmarker.Logger.Error("read failed", "error", err)
 			break
@@ -26,6 +29,8 @@ func (benchmarker *Benchmarker) HandleClientToRelayConnectionWriteLoop(conn *web
 	time.Sleep(5 * time.Second)
 	for {
 		err := conn.WriteMessage(websocket.BinaryMessage, bytes.Repeat([]byte("A"), benchmarker.ClientToHostBytesPerMessage))
+
+		benchmarker.PacketsCounterSent.Add(1)
 
 		if err != nil {
 			benchmarker.Logger.Error("write failed", "error", err)

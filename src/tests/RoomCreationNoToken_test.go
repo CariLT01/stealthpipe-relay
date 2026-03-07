@@ -8,7 +8,7 @@ import (
 )
 
 func TestRoomCreationNoToken(t *testing.T) {
-	srv := core.NewServer(true)
+	srv := core.NewServer(true, core.NewEmptyExtraConfig())
 
 	req := httptest.NewRequest("GET", "/create", nil)
 	w := httptest.NewRecorder()

@@ -21,13 +21,11 @@ type Room struct {
 
 func NewRoom(GameId string) *Room {
 	return &Room{
-		GameId:                        GameId,
-		Clients:                       []*websocket.Conn{},
-		HostConnections:               []*websocket.Conn{},
-		HostWriteMu:                   sync.Mutex{},
-		Host:                          nil,
-		packetsPerSecondClientsToHost: atomic.Int64{},
-		packetsPerSecondHostToClients: atomic.Int64{},
+		GameId:          GameId,
+		Clients:         []*websocket.Conn{},
+		HostConnections: []*websocket.Conn{},
+		HostWriteMu:     sync.Mutex{},
+		Host:            nil,
 	}
 }
 
@@ -40,6 +38,12 @@ type Benchmarker struct {
 	RelayURLButWithoutTheHTTP    string
 
 	RoomsMu sync.RWMutex
+
+	PacketsCounterSent atomic.Int64
+	PacketsCounterRecv atomic.Int64
+
+	PPSSent atomic.Int64
+	PPSRecv atomic.Int64
 }
 
 var opts = &slog.HandlerOptions{
@@ -58,5 +62,10 @@ func NewBenchmarker() *Benchmarker {
 
 		HostToClientsBytesPerMessage: 1,
 		ClientToHostBytesPerMessage:  1,
+
+		PacketsCounterSent: atomic.Int64{},
+		PacketsCounterRecv: atomic.Int64{},
+		PPSSent:            atomic.Int64{},
+		PPSRecv:            atomic.Int64{},
 	}
 }

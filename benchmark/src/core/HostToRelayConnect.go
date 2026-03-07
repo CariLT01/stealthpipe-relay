@@ -12,6 +12,9 @@ func (benchmarker *Benchmarker) HandleHostToRelayConnectionReadLoop(conn *websoc
 
 	for {
 		_, _, err := conn.ReadMessage()
+
+		benchmarker.PacketsCounterRecv.Add(1)
+
 		if err != nil {
 			benchmarker.Logger.Error("read error", "error", err)
 			break
@@ -26,6 +29,8 @@ func (benchmarker *Benchmarker) HandleHostToRelayConnectionWriteLoop(conn *webso
 
 	for {
 		err := conn.WriteMessage(websocket.BinaryMessage, bytes.Repeat([]byte("A"), benchmarker.HostToClientsBytesPerMessage))
+
+		benchmarker.PacketsCounterSent.Add(1)
 
 		if err != nil {
 			benchmarker.Logger.Error("write failed", "error", err)

@@ -23,6 +23,8 @@ COPY --from=builder /app/relay .
 
 # Hugging Face Spaces usually listen on 7860
 EXPOSE 7860
+EXPOSE 10000
+EXPOSE 2112
 
 # Run the relay
 CMD ["./relay"]

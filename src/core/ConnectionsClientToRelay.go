@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 /*
@@ -94,6 +96,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 	app.Logger.Info("new CLIENT ws")
 
 	defer app.handleCleanup(conn, gameId)
+	defer app.Statistics.numberOfClientsConnected.Record(app.Ctx, app.NumberOfClientsConnected.Load())
 	defer app.NumberOfClientsConnected.Add(-1)
 
 	room, exists := app.GetRoomExists(gameId)
@@ -218,6 +221,12 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 		writer.Close()
 
 		app.PacketCounter.Add(1)
+		app.Statistics.packetsPerSecond.Add(app.Ctx, 1, metric.WithAttributes(
+			attribute.String("flow", "from_client"),
+		))
+		app.Statistics.bandwidth.Add(app.Ctx, n, metric.WithAttributes(
+			attribute.String("flow", "from_client"),
+		))
 
 	}
 

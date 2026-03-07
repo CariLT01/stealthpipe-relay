@@ -5,6 +5,8 @@ import (
 	"io"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
@@ -103,6 +105,12 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 		writer.Close()
 
 		app.PacketCounter.Add(1)
+		app.Statistics.packetsPerSecond.Add(app.Ctx, 1, metric.WithAttributes(
+			attribute.String("flow", "from_host"),
+		))
+		app.Statistics.bandwidth.Add(app.Ctx, n, metric.WithAttributes(
+			attribute.String("flow", "from_host"),
+		))
 
 	}
 

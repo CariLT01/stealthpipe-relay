@@ -27,7 +27,29 @@ import (
 
 func main() {
 
-	server := core.NewServer(false)
+	usingGrafanaMetrics := os.Getenv("GRAFANA_METRICS") != ""
+	grafanaKey := os.Getenv("GRAFANA_KEY")
+	grafanaUrl := os.Getenv("GRAFANA_URL")
+	grafanaUser := os.Getenv("GRAFANA_USER")
+
+	if usingGrafanaMetrics {
+		if grafanaKey == "" || grafanaUrl == "" || grafanaUser == "" {
+			panic("Set using grafana metrics, but key, url, or user not set")
+		}
+	}
+
+	server := core.NewServer(false, core.ServerConstructorExtraConfig{
+		UseGrafana:  usingGrafanaMetrics,
+		GrafanaKey:  grafanaKey,
+		GrafanaUrl:  grafanaUrl,
+		GrafanaUser: grafanaUser,
+	})
+
+	if !usingGrafanaMetrics {
+		server.Logger.Info("Not uploading any metrics to Grafana")
+	} else {
+		server.Logger.Info("Uploading metrics to Grafana")
+	}
 
 	if os.Getenv("LIMITED_COMPUTE_MODE") != "" {
 		server.Logger.Warn("warn: Limited compute mode enabled, remove LIMITED_COMPUTE_MODE env to disable")

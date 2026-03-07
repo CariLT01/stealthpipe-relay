@@ -10,7 +10,7 @@ import (
 )
 
 func TestRoomCreationFull(t *testing.T) {
-	app := core.NewServer(true)
+	app := core.NewServer(true, core.NewEmptyExtraConfig())
 
 	powReq := httptest.NewRequest("GET", "/pow", nil)
 	powW := httptest.NewRecorder()

@@ -172,6 +172,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	app.NumberOfClientsConnected.Add(1)
+	app.Statistics.numberOfClientsConnected.Record(app.Ctx, app.NumberOfClientsConnected.Load())
 
 	if isHost != "" {
 		app.Logger.Info("Joining as signal connection as host")

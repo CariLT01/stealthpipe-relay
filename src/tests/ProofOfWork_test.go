@@ -10,7 +10,7 @@ import (
 
 func TestProofOfWork(t *testing.T) {
 
-	app := core.NewServer(true)
+	app := core.NewServer(true, core.NewEmptyExtraConfig())
 
 	req := httptest.NewRequest("GET", "/pow", nil)
 	w := httptest.NewRecorder()

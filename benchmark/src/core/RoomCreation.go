@@ -23,9 +23,36 @@ type TokenPayload struct {
 }
 
 type RoomCreationResponse struct {
-	Ok         bool   `json:"ok"`
-	Message    string `json:"message"`
-	ReuseToken string `json:"reuseToken"`
+	Ok         bool       `json:"ok"`
+	Message    FlexString `json:"message"`
+	ReuseToken string     `json:"reuseToken"`
+}
+
+type FlexString string
+
+func (fs *FlexString) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+
+	// If it's a string in JSON, it will be wrapped in quotes: "1234"
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		*fs = FlexString(s)
+		return nil
+	}
+
+	// If it's not a string (like a raw number 1234), keep it as is
+	// and treat the raw bytes as the string value.
+	*fs = FlexString(b)
+	return nil
+}
+
+func (fs FlexString) String() string {
+	return string(fs)
 }
 
 func decodeJwtPayload(benchmarker *Benchmarker, token string) TokenPayload {
@@ -69,7 +96,7 @@ func CreateRoomAndGetCode(benchmarker *Benchmarker, powToken string, nonce int) 
 		return ""
 	}
 
-	return createRoomResponse.Message
+	return createRoomResponse.Message.String()
 }
 
 func (benchmarker *Benchmarker) CreateRoom() string {

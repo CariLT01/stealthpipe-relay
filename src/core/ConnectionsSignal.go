@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 )
 
@@ -96,6 +98,12 @@ func (app *ServerData) signalRelayHandler(conn *websocket.Conn, gameId string) {
 		}
 
 		handleSignalRelayPacket(app, buf[:n], conn, gameId)
+		app.Statistics.packetsPerSecond.Add(app.Ctx, 1, metric.WithAttributes(
+			attribute.String("flow", "signal"),
+		))
+		app.Statistics.bandwidth.Add(app.Ctx, int64(n), metric.WithAttributes(
+			attribute.String("flow", "signal"),
+		))
 
 		conn.SetReadDeadline(time.Now().Add(time.Duration(app.Config.ReadDeadlineSecondsSignaling) * time.Second))
 	}

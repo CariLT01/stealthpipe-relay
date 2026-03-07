@@ -3,6 +3,9 @@ package core
 import (
 	"net"
 	"net/http"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 /*
@@ -28,5 +31,9 @@ func LogRequest(app *ServerData, r *http.Request) {
 	clientIp := GetIPFromRequest(r)
 
 	app.Logger.Info("incoming request", "endpoint", endpoint, "ip", clientIp)
+
+	app.Statistics.requestsPerSecond.Add(app.Ctx, 1, metric.WithAttributes(
+		attribute.String("endpoint", r.URL.Path),
+	))
 
 }

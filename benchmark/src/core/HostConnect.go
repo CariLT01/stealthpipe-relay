@@ -42,6 +42,9 @@ func (benchmarker *Benchmarker) HostReadLoop(conn *websocket.Conn, gameId string
 
 	for {
 		_, message, err := conn.ReadMessage()
+
+		benchmarker.PacketsCounterRecv.Add(1)
+
 		if err != nil {
 			benchmarker.Logger.Error("read error", "error", err)
 			break
@@ -62,6 +65,9 @@ func (benchmarker *Benchmarker) HostWriteLoop(conn *websocket.Conn, gameId strin
 
 	for range ticker.C {
 		err := conn.WriteMessage(websocket.BinaryMessage, []byte{0x01})
+
+		benchmarker.PacketsCounterSent.Add(1)
+
 		if err != nil {
 			benchmarker.Logger.Error("write error", "error", err)
 			break
