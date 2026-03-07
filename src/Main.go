@@ -31,6 +31,7 @@ func main() {
 	grafanaKey := os.Getenv("GRAFANA_KEY")
 	grafanaUrl := os.Getenv("GRAFANA_URL")
 	grafanaUser := os.Getenv("GRAFANA_USER")
+	production := os.Getenv("PRODUCTION") != ""
 
 	if usingGrafanaMetrics {
 		if grafanaKey == "" || grafanaUrl == "" || grafanaUser == "" {
@@ -49,6 +50,11 @@ func main() {
 		server.Logger.Info("Not uploading any metrics to Grafana")
 	} else {
 		server.Logger.Info("Uploading metrics to Grafana")
+	}
+	if production {
+		server.Logger.Info("Running in PRODUCTION")
+	} else {
+		server.Logger.Info("Running in DEV/STAGING")
 	}
 
 	if os.Getenv("LIMITED_COMPUTE_MODE") != "" {

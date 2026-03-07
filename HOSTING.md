@@ -32,3 +32,17 @@ StealthPipe relay is completely stateless, so it can be containerized efficientl
 
 > [!WARNING]
 > You must host this on a server that is accessible via the Internet! If you host this in your own home, your friends might not be able to connect to it without port forwarding!
+
+## Environment Variables
+
+StealthPipe relay has full support for Grafana. 
+
+```
+Supported environment variables:
+- Set GRAFANA_METRICS to "true" to post grafana metrics using OTLP
+- Set GRAFANA_KEY, GRAFANA_URL, GRAFANA_USER
+- Set LIMITED_COMPUTE_MODE to "true" if needed
+- Set SECRET_KEY to something super secret
+- Set PRODUCTION to "true" in production (controls staging vs. prod)
+- Set SERVICE_NAME to anything other than "" for a custom service name suffix in Grafana
+```
