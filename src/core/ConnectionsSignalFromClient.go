@@ -24,28 +24,48 @@ func HandleSignalPacketFromClient(app *ServerData, message []byte, conn *websock
 	app.RoomsMu.RUnlock()
 
 	if !exists {
+		logger.Warn("Ignored packet. Room does not exist", "gameId", gameId)
 		return
 	}
 
 	if len(message) == 0 {
+		logger.Warn("Ignored packet. Empty message", "gameId", gameId)
 		return
 	}
 	packetType := message[0]
 
+	app.Logger.Info("packet", "packet", message)
+
 	switch packetType {
 	// only act for ping, and return pong
 	case byte(Ping):
+		app.Logger.Warn("Client sent a PING request")
 		room.HostMu.Lock() // lock to prevent race condition
 		conn.WriteMessage(websocket.BinaryMessage, []byte{byte(Pong)})
 		room.HostMu.Unlock()
-	case byte(WebRTC_HandshakeMessage):
-		room.HostMu.Lock()
-		room.Host.WriteMessage(websocket.BinaryMessage, message) // forward handshake data directly to the host
-		room.HostMu.Unlock()
+	case byte(Pong):
+		app.Logger.Warn("Server got PONG request")
+		// do nothing
 	case byte(WebRTC_ConnectionEstablished):
 		// second byte is conn id
 		app.Logger.Info("Client reported WebRTC Connection Established") // temporary
 		// todo: replace with good logic such that it saves the state and logs on connection closed
+	default:
+		// just forward it
+		room.HostMu.Lock()
+		app.Logger.Info("forwarding bytes", "length", len(message))
+		room.Host.WriteMessage(websocket.BinaryMessage, message) // forward handshake data directly to the host
+		room.HostMu.Unlock()
+
+		// client ID index 2
+
+		if len(message) >= 2 {
+
+			clientId := message[1]
+			app.Logger.Info("Assign client ID to conn", "clientId", clientId)
+			room.WebRTCHandshakeConnectionsMap[clientId] = conn
+		}
+
 	}
 
 }
@@ -111,6 +131,7 @@ func (app *ServerData) ClientSignalToRelayHandler(conn *websocket.Conn, gameId s
 			app.Logger.Warn("Abuse detected on signal relay, ending connection")
 			break
 		}
+		app.Logger.Info("Got packet from CLIENT signal", "length", n)
 
 		HandleSignalPacketFromClient(app, buf[:n], conn, gameId)
 		app.Statistics.packetsPerSecond.Add(app.Ctx, 1, metric.WithAttributes(

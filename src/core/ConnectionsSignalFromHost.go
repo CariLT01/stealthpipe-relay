@@ -38,8 +38,16 @@ func HandleSignalPacket(app *ServerData, message []byte, conn *websocket.Conn, g
 		room.HostMu.Lock() // lock to prevent race condition
 		conn.WriteMessage(websocket.BinaryMessage, []byte{byte(Pong)})
 		room.HostMu.Unlock()
-	case byte(WebRTC_HandshakeMessage):
+	case byte(Pong):
+		// do noting
+	default:
+		// just forward whatever else we need
 		// second byte is conn id
+
+		if len(message) < 2 {
+			app.Logger.Error("Cannot send to client, no client ID provided.", "packetType", packetType)
+			return
+		}
 
 		clientId := message[1]
 		otherSignConn, exists := room.WebRTCHandshakeConnectionsMap[clientId]
@@ -50,6 +58,7 @@ func HandleSignalPacket(app *ServerData, message []byte, conn *websocket.Conn, g
 		}
 
 		// forward to the other
+		app.Logger.Info("forwarding bytes", "length", len(message))
 		otherSignConn.WriteMessage(websocket.BinaryMessage, message)
 	}
 
