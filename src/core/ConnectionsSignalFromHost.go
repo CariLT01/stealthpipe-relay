@@ -10,7 +10,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func handleSignalRelayPacket(app *ServerData, message []byte, conn *websocket.Conn, gameId string) {
+func HandleSignalPacket(app *ServerData, message []byte, conn *websocket.Conn, gameId string) {
 	/*
 
 		bytes:
@@ -34,17 +34,30 @@ func handleSignalRelayPacket(app *ServerData, message []byte, conn *websocket.Co
 
 	switch packetType {
 	// only act for ping, and return pong
-	case 0x01:
+	case byte(Ping):
 		room.HostMu.Lock() // lock to prevent race condition
-		conn.WriteMessage(websocket.BinaryMessage, []byte{0x02})
+		conn.WriteMessage(websocket.BinaryMessage, []byte{byte(Pong)})
 		room.HostMu.Unlock()
+	case byte(WebRTC_HandshakeMessage):
+		// second byte is conn id
+
+		clientId := message[1]
+		otherSignConn, exists := room.WebRTCHandshakeConnectionsMap[clientId]
+
+		if !exists {
+			app.Logger.Error("Failed to forward WebRTC Signaling Message! Connection ID not found in map", "connectionId", clientId)
+			return
+		}
+
+		// forward to the other
+		otherSignConn.WriteMessage(websocket.BinaryMessage, message)
 	}
 
 }
 
-func (app *ServerData) signalRelayHandler(conn *websocket.Conn, gameId string) {
+func (app *ServerData) HostSignalToRelayHandler(conn *websocket.Conn, gameId string) {
 
-	app.Logger.Info("New SIGNAL ws")
+	app.Logger.Info("New SIGNAL ws from Server")
 
 	app.RoomsMu.RLock()
 	room, exists := app.Rooms[gameId]
@@ -97,7 +110,7 @@ func (app *ServerData) signalRelayHandler(conn *websocket.Conn, gameId string) {
 			break
 		}
 
-		handleSignalRelayPacket(app, buf[:n], conn, gameId)
+		HandleSignalPacket(app, buf[:n], conn, gameId)
 		app.Statistics.packetsPerSecond.Add(app.Ctx, 1, metric.WithAttributes(
 			attribute.String("flow", "signal"),
 		))

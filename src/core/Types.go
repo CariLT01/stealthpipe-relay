@@ -39,6 +39,8 @@ type Room struct {
 	ClientsLimiter                *rate.Limiter
 	CreatedTime                   int64
 	HasHost                       bool
+
+	WebRTCHandshakeConnectionsMap map[byte]*websocket.Conn // maps a byte (0 - 255) to a websocket connection on the HOST signaling view, such that it knows where it goes
 }
 
 type ServerConstructorExtraConfig struct {

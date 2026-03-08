@@ -18,6 +18,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	isHost := params.Get("host")
 	requestId := params.Get("request")
 	version := params.Get("version")
+	clientSignal := params.Get("signal")
 
 	// Check client version
 
@@ -176,10 +177,16 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 	if isHost != "" {
 		app.Logger.Info("Joining as signal connection as host")
-		app.signalRelayHandler(conn, roomID)
+		app.HostSignalToRelayHandler(conn, roomID)
 	} else {
-		app.Logger.Info("Joining as client")
-		app.clientRelayHandler(conn, roomID)
+		if clientSignal != "" {
+			app.Logger.Info("Joining as signal connection as client")
+			app.ClientSignalToRelayHandler(conn, roomID)
+		} else {
+			app.Logger.Info("Joining as client")
+			app.clientRelayHandler(conn, roomID)
+		}
+
 	}
 
 	//relayForwardingLoop(conn, isHost != "", roomID)
