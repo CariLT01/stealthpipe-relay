@@ -3,11 +3,12 @@ package core
 type SignalingMessageType int
 
 const (
-	Ping                         SignalingMessageType = iota // 0
-	Pong                                                     // 1
-	WebRTC_HandshakeMessage                                  // 2
-	WebRTC_ConnectionEstablished                             // 3
-	WebRTC_RequestConnection                                 // 4
-	WebRTC_ConnectionFailed                                  // 5
-	WebRTC_ConnectionReady
+	Idle                         SignalingMessageType = iota // 0
+	Ping                                                     // 1
+	Pong                                                     // 2
+	WebRTC_HandshakeMessage                                  // 3
+	WebRTC_ConnectionEstablished                             // 4
+	WebRTC_RequestConnection                                 // 5
+	WebRTC_ConnectionFailed                                  // 6
+	WebRTC_ConnectionReady                                   // 7
 )
