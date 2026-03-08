@@ -4,6 +4,8 @@
 
 ![LoC](https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/CariLT01/stealthpipe-relay/badge?style=flat&logoColor=white&color=c78aff&style=for-the-badge&v=1)
 
+> [!WARNING]
+> **This is the WebRTC Feature Branch**. It aims to add WebRTC support for StealthPipe when possible so it can try establishing a direct P2P connection for lower ping when possible. Otherwise, it will fallback to the old WSS relay-based system.
 
 This repository contains the StealthPipe relay and is licensed under the MIT License.
 
