@@ -117,6 +117,8 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 			delete(app.Rooms, gameId) // we must delete, since we have the lock
 		}
 
+		time.Sleep(5 * time.Second) // ensure full deletion
+
 		app.Logger.Info("Successfully reused a room code using a reuse token")
 	}
 
