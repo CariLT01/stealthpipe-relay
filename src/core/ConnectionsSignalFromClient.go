@@ -79,6 +79,7 @@ func (app *ServerData) ClientSignalToRelayHandler(conn *websocket.Conn, gameId s
 	app.RoomsMu.RUnlock()
 
 	if !exists || room == nil {
+		app.Logger.Error("Room does not exist! Closing signal relay connection", "gameId", gameId)
 		conn.Close()
 		return
 	}

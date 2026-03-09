@@ -46,9 +46,11 @@ func (app *ServerData) handleCleanup(conn *websocket.Conn, gameId string) {
 		room.HostToClientsConnectionsMutex.RUnlock()
 
 		if exists1 {
+			app.Logger.Info("Closing host to relay connection. Cause: HandleCleanup")
 			toClose = append(toClose, hostConnection)
 		}
 		if exists2 {
+			app.Logger.Info("Closing client to relay connection. Cause: HandleCleanup")
 			toClose = append(toClose, clientConnection)
 		}
 
@@ -67,6 +69,8 @@ func (app *ServerData) handleCleanup(conn *websocket.Conn, gameId string) {
 			app.Logger.Warn("Skipped null pointer websocket")
 			continue
 		}
+
+		app.Logger.Info("HandleCleanup called, closing websocket in toClose")
 
 		ws.Close()
 	}

@@ -95,7 +95,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			clientConn, exists := room.RequestedConnectionsMap[requestId]
 
 			if !exists {
-				app.Logger.Error("Request ID not found: ", "request", requestId)
+				app.Logger.Error("Request ID not found. Closing relay connection", "request", requestId)
 				room.RequestedConnectionsMapMutex.Unlock()
 				conn.Close()
 				return
@@ -110,7 +110,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			hostConn, exists := room.ClientsToHostConnections[clientConn]
 
 			if !exists {
-				app.Logger.Error("Client connection not found")
+				app.Logger.Error("Client connection not found. Closing relay connection")
 				room.ClientsToHostConnectionsMutex.Unlock()
 				conn.Close()
 				return
