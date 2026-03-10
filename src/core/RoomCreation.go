@@ -135,6 +135,7 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 		CreatedTime:                   time.Now().UnixMilli(),
 		HasHost:                       false,
 		LastRoomFilledTime:            atomic.Int64{},
+		WebRTCHandshakeConnectionsMap: make(map[byte]*websocket.Conn),
 		HostOutboundLimiter:           rate.NewLimiter(rate.Limit(app.Config.PacketThrottlingOutboundHost), app.Config.PacketThrottlingBurstOutbound),
 		ClientsLimiter:                rate.NewLimiter(rate.Limit(app.Config.PacketThrottlingInboundHost), app.Config.PacketThrottlingBurstInbound),
 	}

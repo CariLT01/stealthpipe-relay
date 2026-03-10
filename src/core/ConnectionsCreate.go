@@ -18,6 +18,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	isHost := params.Get("host")
 	requestId := params.Get("request")
 	version := params.Get("version")
+	clientSignal := params.Get("signal")
 
 	// Check client version
 
@@ -94,7 +95,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			clientConn, exists := room.RequestedConnectionsMap[requestId]
 
 			if !exists {
-				app.Logger.Error("Request ID not found: ", "request", requestId)
+				app.Logger.Error("Request ID not found. Closing relay connection", "request", requestId)
 				room.RequestedConnectionsMapMutex.Unlock()
 				conn.Close()
 				return
@@ -109,7 +110,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			hostConn, exists := room.ClientsToHostConnections[clientConn]
 
 			if !exists {
-				app.Logger.Error("Client connection not found")
+				app.Logger.Error("Client connection not found. Closing relay connection")
 				room.ClientsToHostConnectionsMutex.Unlock()
 				conn.Close()
 				return
@@ -176,10 +177,16 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 	if isHost != "" {
 		app.Logger.Info("Joining as signal connection as host")
-		app.signalRelayHandler(conn, roomID)
+		app.HostSignalToRelayHandler(conn, roomID)
 	} else {
-		app.Logger.Info("Joining as client")
-		app.clientRelayHandler(conn, roomID)
+		if clientSignal != "" {
+			app.Logger.Info("Joining as signal connection as client")
+			app.ClientSignalToRelayHandler(conn, roomID)
+		} else {
+			app.Logger.Info("Joining as client")
+			app.clientRelayHandler(conn, roomID)
+		}
+
 	}
 
 	//relayForwardingLoop(conn, isHost != "", roomID)
