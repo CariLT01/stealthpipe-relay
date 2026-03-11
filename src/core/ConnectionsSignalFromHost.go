@@ -82,7 +82,7 @@ func (app *ServerData) HostSignalToRelayHandler(conn *websocket.Conn, gameId str
 	buf := app.packetPool.Get().([]byte)
 	defer app.packetPool.Put(buf[:cap(buf)])
 
-	signalLimiter := rate.NewLimiter(rate.Limit(2), 10)
+	signalLimiter := rate.NewLimiter(rate.Limit(20), 50)
 
 	conn.SetReadDeadline(time.Now().Add(time.Duration(app.Config.ReadDeadlineSecondsSignaling) * time.Second))
 
