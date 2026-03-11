@@ -12,16 +12,20 @@ import (
 
 func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gameId string) {
 
+	closeReason := WebsocketConnectionCloseReason.Unspecified
+
 	defer func() {
 		if r := recover(); r != nil {
 			app.Logger.Info("Recovered from panic in handleHostToRelayGameConnection:", "r", r)
-			app.handleCleanup(conn, gameId)
+			app.handleCleanup(conn, gameId, WebsocketConnectionCloseReason.InternalError)
 		}
 	}()
 
 	app.Logger.Info("new SERVER ws")
 
-	defer app.handleCleanup(conn, gameId)
+	defer func(reason CloseReasonType) {
+		app.handleCleanup(conn, gameId, reason)
+	}(closeReason)
 
 	streamingBuf := app.smallPool.Get().([]byte)
 	defer app.smallPool.Put(streamingBuf)
@@ -53,6 +57,7 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 
 		if err != nil {
 			app.Logger.Error("Got error", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
@@ -64,6 +69,7 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 		writer, err := connection.NextWriter(websocket.BinaryMessage)
 		if err != nil {
 			app.Logger.Error("get writer failed", "error", err)
+			closeReason = WebsocketConnectionCloseReason.SocketWriteFailed
 			break
 		}
 
@@ -72,15 +78,18 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 		lr := io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1)
 		n, err := io.CopyBuffer(writer, lr, streamingBuf)
 		if err != nil && err != io.EOF {
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
 		if n > int64(app.Config.PacketMaximumSize) {
 			app.Logger.Info("Packet too large, kicking client.")
+			closeReason = WebsocketConnectionCloseReason.PacketTooLarge
 			break
 		}
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			app.Logger.Error("Got error: ", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
@@ -90,11 +99,13 @@ func (app *ServerData) handleHostToRelayGameConnection(conn *websocket.Conn, gam
 
 		if !exists {
 			app.Logger.Error("Room no longer exists")
+			closeReason = WebsocketConnectionCloseReason.RoomNotFound
 			return
 		}
 		err = limiter.WaitN(context.Background(), int(n))
 		if err != nil {
 			app.Logger.Error("Rate limiting failed: ", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.InternalError
 			return
 		}
 

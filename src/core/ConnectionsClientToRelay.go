@@ -95,7 +95,11 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	app.Logger.Info("new CLIENT ws")
 
-	defer app.handleCleanup(conn, gameId)
+	closeReason := WebsocketConnectionCloseReason.Unspecified
+
+	defer func(reason CloseReasonType) {
+		app.handleCleanup(conn, gameId, reason)
+	}(closeReason)
 	defer app.Statistics.numberOfClientsConnected.Record(app.Ctx, app.NumberOfClientsConnected.Load())
 	defer app.NumberOfClientsConnected.Add(-1)
 
@@ -103,7 +107,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	if !exists {
 		app.Logger.Error("Room ID does not exist", "roomId", gameId)
-		conn.Close()
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
 		return
 	}
 
@@ -111,7 +115,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	if host == nil {
 		app.Logger.Error("Room has no host", "roomId", gameId)
-		conn.Close()
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNoHost)
 		return
 	}
 
@@ -119,7 +123,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	if hostMu == nil {
 		app.Logger.Error("Room has no host mutex", "roomId", gameId)
-		conn.Close()
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomBadState)
 		return
 	}
 
@@ -153,6 +157,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	if err != nil {
 		app.Logger.Error("Error occurred while trying to write signal: ", "error", err.Error())
+		closeReason = WebsocketConnectionCloseReason.SocketWriteFailed
 		return
 	}
 
@@ -162,6 +167,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 	if hostConn == nil {
 		app.Logger.Error("Failed to get host connection", "message", message)
+		closeReason = WebsocketConnectionCloseReason.PairLinkFailed
 		return
 	}
 
@@ -175,6 +181,7 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 
 		if err != nil {
 			app.Logger.Error("Got error: ", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
@@ -186,27 +193,32 @@ func (app *ServerData) clientRelayHandler(conn *websocket.Conn, gameId string) {
 		writer, err := hostConn.NextWriter(websocket.BinaryMessage)
 		if err != nil {
 			app.Logger.Error("get writer failed", "error", err)
+			closeReason = WebsocketConnectionCloseReason.SocketWriteFailed
 			break
 		}
 
 		lr := io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1)
 		n, err := io.CopyBuffer(writer, lr, streamingBuf)
 		if err != nil && err != io.EOF {
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
 		if n > int64(app.Config.PacketMaximumSize) {
 			app.Logger.Info("Packet too large, kicking client.")
+			closeReason = WebsocketConnectionCloseReason.PacketTooLarge
 			break
 		}
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			app.Logger.Error("Got error: ", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
 		err = inboundLimiter.WaitN(context.Background(), int(n))
 		if err != nil {
 			app.Logger.Error("Inbound rate limiting failed: ", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.InternalError
 			return
 		}
 

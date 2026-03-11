@@ -86,7 +86,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 			if !exists {
 				app.Logger.Error("Room not found")
-				conn.Close()
+				app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
 				return
 			}
 
@@ -97,7 +97,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			if !exists {
 				app.Logger.Error("Request ID not found. Closing relay connection", "request", requestId)
 				room.RequestedConnectionsMapMutex.Unlock()
-				conn.Close()
+				app.CloseWebsocket(conn, WebsocketConnectionCloseReason.InvalidRequestID)
 				return
 			}
 
@@ -112,7 +112,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			if !exists {
 				app.Logger.Error("Client connection not found. Closing relay connection")
 				room.ClientsToHostConnectionsMutex.Unlock()
-				conn.Close()
+				app.CloseWebsocket(conn, WebsocketConnectionCloseReason.PairLinkFailed)
 				return
 			}
 
@@ -147,7 +147,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				if room.Host != nil {
 					app.Logger.Error("Room already has a host! Disconnecting")
 					app.RoomsMu.Unlock()
-					conn.Close()
+					app.CloseWebsocket(conn, WebsocketConnectionCloseReason.InvalidAction)
 					return
 				}
 				room.Host = conn
@@ -157,7 +157,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 				app.RoomsMu.Unlock()
 				app.Logger.Error("Room not found")
-				conn.Close()
+				app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
 				return
 			}
 

@@ -80,17 +80,21 @@ func (app *ServerData) ClientSignalToRelayHandler(conn *websocket.Conn, gameId s
 
 	if !exists || room == nil {
 		app.Logger.Error("Room does not exist! Closing signal relay connection", "gameId", gameId)
-		conn.Close()
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
 		return
 	}
 
 	if !room.HasHost {
 		app.Logger.Error("closed orphan client signal")
-		conn.Close()
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomBadState)
 		return
 	}
 
-	defer app.handleCleanup(conn, gameId)
+	closeReason := WebsocketConnectionCloseReason.Unspecified
+
+	defer func(reason CloseReasonType) {
+		app.handleCleanup(conn, gameId, reason)
+	}(closeReason)
 	defer app.NumberOfClientsConnected.Add(-1)
 
 	buf := app.packetPool.Get().([]byte)
@@ -105,6 +109,7 @@ func (app *ServerData) ClientSignalToRelayHandler(conn *websocket.Conn, gameId s
 		messageType, reader, err := conn.NextReader()
 		if err != nil {
 			app.Logger.Error("Got error", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
@@ -116,20 +121,24 @@ func (app *ServerData) ClientSignalToRelayHandler(conn *websocket.Conn, gameId s
 		lr := io.LimitReader(reader, int64(app.Config.PacketMaximumSize)+1)
 		n, err := io.ReadAtLeast(lr, buf, 1)
 		if err != nil && err != io.EOF {
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
 		if n > int(app.Config.SignalingMaximumPacketSize) {
 			app.Logger.Info("Packet too large, kicking client.")
+			closeReason = WebsocketConnectionCloseReason.PacketTooLarge
 			break // This exits the loop and triggers handleCleanup
 		}
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			app.Logger.Error("Got error: ", "error", err.Error())
+			closeReason = WebsocketConnectionCloseReason.SocketReadFailed
 			break
 		}
 
 		if !signalLimiter.Allow() {
 			app.Logger.Warn("Abuse detected on signal relay, ending connection")
+			closeReason = WebsocketConnectionCloseReason.ConnectionHighUsage
 			break
 		}
 		app.Logger.Info("Got packet from CLIENT signal", "length", n)

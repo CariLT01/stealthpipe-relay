@@ -105,7 +105,7 @@ func (app *ServerData) HandleCreatePath(w http.ResponseWriter, r *http.Request) 
 			if app.Rooms[gameId].Host != nil {
 				app.Logger.Info("old client detected, evicting. new client presented a valid reuse token, and chance of collision is too thin.")
 				app.RoomsMu.Unlock() // unlock for cleanup
-				oldRoom.Host.Close() // close
+				app.CloseWebsocket(oldRoom.Host, WebsocketConnectionCloseReason.ReuseTokenPresented)
 
 				// wait go scheduler
 				time.Sleep(50 * time.Millisecond) // give time to go scheduler

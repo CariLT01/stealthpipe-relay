@@ -66,7 +66,7 @@ func CleanIdleRooms(app *ServerData) {
 
 			// Close connections AFTER unlocking roomsMu
 			for _, conn := range toClose {
-				conn.Close()
+				app.CloseWebsocket(conn, WebsocketConnectionCloseReason.ConnectionIdle)
 				app.Logger.Debug("Closed idle connection")
 			}
 		}
