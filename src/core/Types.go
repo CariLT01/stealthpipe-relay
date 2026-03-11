@@ -129,6 +129,10 @@ type ServerConfig struct {
 	GrafanaUrl   string
 	GrafanaKey   string
 	GrafanaUser  string
+
+	// Signal throttling
+	SignalMaxPPS   int
+	SignalBurstPPS int
 }
 
 func NewServerConfig(conf ServerConstructorExtraConfig) *ServerConfig {
@@ -158,6 +162,9 @@ func NewServerConfig(conf ServerConstructorExtraConfig) *ServerConfig {
 		GrafanaUrl:   conf.GrafanaUrl,
 		GrafanaKey:   conf.GrafanaKey,
 		GrafanaUser:  conf.GrafanaUser,
+
+		SignalMaxPPS:   20,
+		SignalBurstPPS: 50,
 	}
 }
 
