@@ -20,40 +20,53 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	version := params.Get("version")
 	clientSignal := params.Get("signal")
 
+	// Let it connect first
+	conn, err := app.Upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		http.Error(w, "Failed to upgrade connection", http.StatusInternalServerError)
+		return
+	}
+
 	// Check client version
 
 	if version == "" {
 		app.Logger.Error("Outdated client found")
-		http.Error(w, "{\"ok\":false,\"message\":\"Outdated client\"}", http.StatusUpgradeRequired)
+		// http.Error(w, "{\"ok\":false,\"message\":\"Outdated client\"}", http.StatusUpgradeRequired)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.OutdatedClient)
 		return
 	}
 
 	relayVersionSem, err := semver.NewVersion(app.Config.RelayVersion)
 	if err != nil {
-		http.Error(w, "{\"ok\":false,\"message\":\"Server error\"}", http.StatusInternalServerError)
+		// http.Error(w, "{\"ok\":false,\"message\":\"Server error\"}", http.StatusInternalServerError)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.InternalError)
 		return
 	}
 
 	v, err := semver.NewVersion(version)
 
 	if err != nil {
-		http.Error(w, "{\"ok\":false,\"message\":\"Invalid client version\"}", http.StatusBadRequest)
+		// http.Error(w, "{\"ok\":false,\"message\":\"Invalid client version\"}", http.StatusBadRequest)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.InvalidVersion)
 		return
 	}
 
 	if v.Major() > relayVersionSem.Major() {
-		http.Error(w, "{\"ok\":false,\"message\":\"Version mismatch, client too new\"}", http.StatusUpgradeRequired)
+		// http.Error(w, "{\"ok\":false,\"message\":\"Version mismatch, client too new\"}", http.StatusUpgradeRequired)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.UnsupportedClient)
 		return
 	}
 
 	if v.Major() < relayVersionSem.Major() {
-		http.Error(w, "{\"ok\":false,\"message\":\"Outdated client, client too old\"}", http.StatusUpgradeRequired)
+		// http.Error(w, "{\"ok\":false,\"message\":\"Outdated client, client too old\"}", http.StatusUpgradeRequired)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.OutdatedClient)
 		return
 	}
 
 	if roomID == "" {
 		app.Logger.Error("No room ID provided")
-		http.Error(w, "{\"ok\":false,\"message\":\"No room ID provided\"}", http.StatusBadRequest)
+		// http.Error(w, "{\"ok\":false,\"message\":\"No room ID provided\"}", http.StatusBadRequest)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.BadRequest)
 		return
 	}
 
@@ -62,17 +75,12 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	if app.Rooms[roomID] == nil {
 		app.RoomsMu.RUnlock()
 		app.Logger.Error("Room not found", "room", roomID)
-		http.Error(w, "{\"ok\":false,\"message\":\"Room not found\"}", http.StatusNotFound)
+		// http.Error(w, "{\"ok\":false,\"message\":\"Room not found\"}", http.StatusNotFound)
+		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
 		return
 	}
 
 	app.RoomsMu.RUnlock()
-
-	conn, err := app.Upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, "Failed to upgrade connection", http.StatusInternalServerError)
-		return
-	}
 
 	if isHost != "" {
 

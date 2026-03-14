@@ -22,6 +22,10 @@ var WebsocketConnectionCloseReason = struct {
 	SignalDisconnected      CloseReasonType
 	Unspecified             CloseReasonType
 	PacketTooLarge          CloseReasonType
+	BadRequest              CloseReasonType
+	InvalidVersion          CloseReasonType
+	OutdatedClient          CloseReasonType
+	UnsupportedClient       CloseReasonType
 }{
 	HostDisconnected:        "HOST_DISCONNECTED",
 	ConnectionHighBandwidth: "HIGH_BANDWIDTH",
@@ -42,4 +46,8 @@ var WebsocketConnectionCloseReason = struct {
 	Unspecified:             "UNSPECIFIED",
 	PacketTooLarge:          "PACKET_TOO_LARGE",
 	SignalDisconnected:      "SIGNAL_DISCONNECTED",
+	BadRequest:              "BAD_REQUEST",
+	InvalidVersion:          "INVALID_VERSION",
+	OutdatedClient:          "OUTDATED_CLIENT",
+	UnsupportedClient:       "UNSUPPORTED_CLIENT",
 }
