@@ -22,7 +22,7 @@ The server includes some basic security features to prevent bots from abusing th
 - Proof of Work for creating a session
 - Packet size limit and bandwidth throttling (most providers have a limited GB/month throughput)
 
-The server config is in **src/core/Types.go** near the bottom.
+The server config is in **src/core/Types.go** near the bottom. As of right now, you must create your own image if you wish to modify the config (requires recompiling).
 
 ## Hosting on Providers
 
