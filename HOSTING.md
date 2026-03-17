@@ -37,6 +37,13 @@ StealthPipe relay is completely stateless, so it can be containerized efficientl
 > [!WARNING]
 > You must host this on a server that is accessible via the Internet! If you host this in your own home, your friends might not be able to connect to it without port forwarding!
 
+## Cool Places to Host
+
+- Render -- Completley free, limited throughput, low-latency. Good for a few friends
+- Oracle -- Provides free services, requires identity verification but the hardware is very powerful. High throughput. No domain provided by default.
+- HuggingFace -- Free, but you must upload the files manually
+
+
 ## Environment Variables
 
 StealthPipe relay has full support for Grafana. 
