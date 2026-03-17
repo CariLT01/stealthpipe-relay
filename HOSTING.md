@@ -4,10 +4,14 @@ Hosting a StealthPipe relay yourself can help reduce latency and improve stabili
 
 **Quick Steps**
 
-1. Run `docker run -d -p YOUR_PORT:YOUR_PORT \
+1. Run
+```bash
+docker run -d -p YOUR_PORT:YOUR_PORT \
   -e PORT=YOUR_PORT \
   -e SECRET_KEY=your_super_secret_key \
-  --name stealth-relay 0999847695359/stealthpipe-relay:latest`
+  --name stealth-relay 0999847695359/stealthpipe-relay:latest
+  ```
+
 2. Put your relay's URL into your StealthPipe's mod config in Mod Menu/Cloth Config and **every other player that wants to use your relay to join must also modify their own mod config** (Also remove the leading slash!)
 3. You're done!
 
