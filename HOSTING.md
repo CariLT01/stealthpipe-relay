@@ -41,7 +41,7 @@ StealthPipe relay is completely stateless, so it can be containerized efficientl
 
 - Render -- Completley free, limited throughput, low-latency. Good for a few friends
 - Oracle -- Provides free services, requires identity verification but the hardware is very powerful. High throughput. No domain provided by default.
-- HuggingFace -- Free, but you must upload the files manually
+- HuggingFace -- Free, but you must upload the files manually. Higher latency. No GB/Month limit. Hardware is more powerful compared to Render, although this varies.
 
 
 ## Environment Variables
