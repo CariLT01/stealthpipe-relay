@@ -1,6 +1,8 @@
 package core
 
 import (
+	"time"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -37,6 +39,12 @@ func (app *ServerData) handleCleanup(conn *websocket.Conn, gameId string, baseCl
 
 		delete(app.Rooms, gameId)
 		app.Logger.Info("Host left, room deleted")
+
+		// We also need to append this to the recently deleted list
+		app.RecentlyDeletedRoomsMutex.Lock()
+		app.Logger.Info("Host left with reason", "reason", baseCloseReason)
+		app.RecentlyDeletedRooms[gameId] = NewRecentlyDeletedRoom(time.Now(), baseCloseReason)
+		app.RecentlyDeletedRoomsMutex.Unlock()
 	} else {
 		// If client leaves, just remove them from the map
 		// uuid := room.ClientsReverseMap[conn]

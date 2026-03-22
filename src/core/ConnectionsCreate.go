@@ -65,6 +65,7 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 	if roomID == "" {
 		app.Logger.Error("No room ID provided")
+
 		// http.Error(w, "{\"ok\":false,\"message\":\"No room ID provided\"}", http.StatusBadRequest)
 		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.BadRequest)
 		return
@@ -75,6 +76,25 @@ func (app *ServerData) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	if app.Rooms[roomID] == nil {
 		app.RoomsMu.RUnlock()
 		app.Logger.Error("Room not found", "room", roomID)
+		if isHost == "" {
+			// it's a client, send HOST_ALREADY_DISCONNECTED if it's present in the recent disconnects list
+			app.RecentlyDeletedRoomsMutex.RLock()
+			disconnectData, exists := app.RecentlyDeletedRooms[roomID]
+			app.RecentlyDeletedRoomsMutex.RUnlock()
+			if !exists {
+				// couldn't find it in recent disconnects
+				app.Logger.Info("Not a recent disconnect")
+				app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
+				return
+			}
+
+			// otherwise, it's a disconnect
+			app.Logger.Info("Recent disconnect indicated reason", "reason", disconnectData.DeletionReason)
+
+			// For now, just ignore the real disconnect reason and give HOST_CLOSED_ROOM
+			app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomRecentlyClosed)
+			return
+		}
 		// http.Error(w, "{\"ok\":false,\"message\":\"Room not found\"}", http.StatusNotFound)
 		app.CloseWebsocket(conn, WebsocketConnectionCloseReason.RoomNotFound)
 		return
