@@ -26,6 +26,7 @@ var WebsocketConnectionCloseReason = struct {
 	InvalidVersion          CloseReasonType
 	OutdatedClient          CloseReasonType
 	UnsupportedClient       CloseReasonType
+	RoomRecentlyClosed      CloseReasonType
 }{
 	HostDisconnected:        "HOST_DISCONNECTED",
 	ConnectionHighBandwidth: "HIGH_BANDWIDTH",
@@ -50,4 +51,5 @@ var WebsocketConnectionCloseReason = struct {
 	InvalidVersion:          "INVALID_VERSION",
 	OutdatedClient:          "OUTDATED_CLIENT",
 	UnsupportedClient:       "UNSUPPORTED_CLIENT",
+	RoomRecentlyClosed:      "ROOM_RECENTLY_CLOSED",
 }

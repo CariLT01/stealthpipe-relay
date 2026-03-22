@@ -72,3 +72,30 @@ func CleanIdleRooms(app *ServerData) {
 		}
 	}
 }
+
+func CleanRecentlyDeletedRoomReasons(app *ServerData) {
+	ticker := time.NewTicker(30 * time.Second)
+	for range ticker.C {
+		// read to delete
+		var roomsToDelete []string
+
+		app.RecentlyDeletedRoomsMutex.RLock()
+		for roomId, data := range app.RecentlyDeletedRooms {
+			if time.Since(data.TimeDeleted) > time.Duration(app.Config.RoomDeletionReasonStorageTimeSeconds)*time.Second {
+				app.Logger.Info("Queued room reason for disconnect", "roomId", roomId, "reason", data.DeletionReason)
+				roomsToDelete = append(roomsToDelete, roomId)
+			}
+		}
+		app.RecentlyDeletedRoomsMutex.RUnlock()
+
+		// iterate and delete
+
+		app.RecentlyDeletedRoomsMutex.Lock()
+		for _, roomId := range roomsToDelete {
+			app.Logger.Info("Deleted room reason", "roomId", roomId)
+			delete(app.RecentlyDeletedRooms, roomId)
+		}
+		app.RecentlyDeletedRoomsMutex.Unlock()
+
+	}
+}

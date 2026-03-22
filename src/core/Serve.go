@@ -11,6 +11,7 @@ func (server *ServerData) DoInit() {
 	go MonitorTraffic(server)
 	go CleanUnusedRooms(server)
 	go CleanIdleRooms(server)
+	go CleanRecentlyDeletedRoomReasons(server)
 
 	go server.StatsPPSTicker()
 

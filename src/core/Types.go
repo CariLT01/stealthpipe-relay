@@ -58,6 +58,11 @@ type ServerStatistics struct {
 	packetProcessingTime     metric.Float64Histogram
 }
 
+type RecentlyDeletedRoom struct {
+	TimeDeleted    time.Time
+	DeletionReason CloseReasonType
+}
+
 type ServerData struct {
 	Rooms                    map[string]*Room
 	RoomsMu                  sync.RWMutex
@@ -91,6 +96,10 @@ type ServerData struct {
 	MeterProvider       *sdkmetric.MeterProvider
 	RelayMeter          metric.Meter
 	Ctx                 context.Context
+
+	// Tracks recently deleted rooms, along with their reason
+	RecentlyDeletedRooms      map[string]*RecentlyDeletedRoom
+	RecentlyDeletedRoomsMutex sync.RWMutex
 }
 
 type ServerConfig struct {
@@ -113,8 +122,9 @@ type ServerConfig struct {
 	DifficultyCooldown   int64 // cooldown in milliseconds
 
 	// Cleanup
-	RoomEmptyCleanupDelay int64 // milliseconds
-	RoomIdleNoClientDelay int64 // milliseconds
+	RoomEmptyCleanupDelay                int64 // milliseconds
+	RoomIdleNoClientDelay                int64 // milliseconds
+	RoomDeletionReasonStorageTimeSeconds int64 // seconds
 
 	// Stability and instance health
 	TerminateWhenUnhealthy       bool
@@ -150,10 +160,11 @@ func NewServerConfig(conf ServerConstructorExtraConfig) *ServerConfig {
 		Difficulty7Threshold: 100,    // 100 rps
 		DifficultyCooldown:   30_000, // milliseconds
 
-		RoomEmptyCleanupDelay:        60_000,      // milliseconds
-		RoomIdleNoClientDelay:        60_000 * 15, // milliseconds
-		TerminateWhenUnhealthy:       true,
-		ReadDeadlineSecondsSignaling: 30,
+		RoomEmptyCleanupDelay:                60_000,      // milliseconds
+		RoomIdleNoClientDelay:                60_000 * 15, // milliseconds
+		RoomDeletionReasonStorageTimeSeconds: 30,
+		TerminateWhenUnhealthy:               true,
+		ReadDeadlineSecondsSignaling:         30,
 
 		reuseTokenExpiryHours: 3,
 		powTokenExpiryMinutes: 5,
@@ -331,5 +342,15 @@ func NewServer(slim bool, ext ServerConstructorExtraConfig) *ServerData {
 		RelayMeter:          relayMeter,
 		Ctx:                 ctx,
 		Statistics:          NewServerStatistics(relayMeter),
+
+		RecentlyDeletedRooms:      make(map[string]*RecentlyDeletedRoom),
+		RecentlyDeletedRoomsMutex: sync.RWMutex{},
+	}
+}
+
+func NewRecentlyDeletedRoom(time time.Time, reason CloseReasonType) *RecentlyDeletedRoom {
+	return &RecentlyDeletedRoom{
+		TimeDeleted:    time,
+		DeletionReason: reason,
 	}
 }
