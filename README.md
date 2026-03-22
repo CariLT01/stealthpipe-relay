@@ -1,14 +1,18 @@
-# StealthPipe Relay
+<div align="center"><center>
 
-*Portable, Multi-Threaded, Lightweight*
+# StealthPipe Relay
 
 ![LoC](https://img.shields.io/endpoint?url=https://ghloc.vercel.app/api/CariLT01/stealthpipe-relay/badge?style=flat&logoColor=white&color=c78aff&style=for-the-badge&v=1)
 
-This repository contains the StealthPipe relay and is licensed under the MIT License.
+[StealthPipe Mod Repository](https://github.com/CariLT01/stealthpipe-mod)
 
-### Hosting the Relay
+</center></div>
 
-Instructions for self-hosting the relay can be found in `HOSTING.md`.
+**This is the relay-side code for the StealthPipe mod**. It forwards traffic from one client to another, manages routing and room creation. It also manages signaling for WebRTC ICE negotiation.
+
+To host the relay, see [HOSTING.md](https://github.com/CariLT01/stealthpipe-relay/blob/main/HOSTING.md).
+
+To see full technical details, see [TECHNICAL.md](https://github.com/CariLT01/stealthpipe-relay/blob/main/TECHNICAL.md).
 
 ### Performance
 
@@ -16,8 +20,7 @@ The StealthPipe relay is small, portable, and efficient. It is able to utilize m
 
 ### Bugs and Issues
 
-You will probably find a lot of them. Report them in the issues tab.
-Deadlocks do happen, sorry.
+Please report them in the Issue Tracker. If the issue is not related to the relay, but instead is related to the mod, please report them in the [StealthPipe Mod Repository](https://github.com/CariLT01/stealthpipe-mod).
 
 ### Frequently Asked Questions
 

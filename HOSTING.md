@@ -4,10 +4,14 @@ Hosting a StealthPipe relay yourself can help reduce latency and improve stabili
 
 **Quick Steps**
 
-1. Run `docker run -d -p YOUR_PORT:YOUR_PORT \
+1. Run
+```bash
+docker run -d -p YOUR_PORT:YOUR_PORT \
   -e PORT=YOUR_PORT \
   -e SECRET_KEY=your_super_secret_key \
-  --name stealth-relay 0999847695359/stealthpipe-relay:latest`
+  --name stealth-relay 0999847695359/stealthpipe-relay:latest
+  ```
+
 2. Put your relay's URL into your StealthPipe's mod config in Mod Menu/Cloth Config and **every other player that wants to use your relay to join must also modify their own mod config** (Also remove the leading slash!)
 3. You're done!
 
@@ -22,7 +26,7 @@ The server includes some basic security features to prevent bots from abusing th
 - Proof of Work for creating a session
 - Packet size limit and bandwidth throttling (most providers have a limited GB/month throughput)
 
-The server config is in **src/core/Types.go** near the bottom.
+The server config is in **src/core/Types.go** near the bottom. As of right now, you must create your own image if you wish to modify the config (requires recompiling).
 
 ## Hosting on Providers
 
@@ -32,6 +36,17 @@ StealthPipe relay is completely stateless, so it can be containerized efficientl
 
 > [!WARNING]
 > You must host this on a server that is accessible via the Internet! If you host this in your own home, your friends might not be able to connect to it without port forwarding!
+
+## Cool Places to Host
+
+- Render -- Completley free, limited throughput, low-latency. Good for a few friends
+- Oracle -- Provides free services, requires identity verification but the hardware is very powerful. High throughput. No domain provided by default.
+- HuggingFace -- Free, but you must upload the files manually. Higher latency. No GB/Month limit. Hardware is more powerful compared to Render, although this varies. **Can be subject to moderation.**
+
+Any other service provider you choose must support the following:
+  - **HTTPS**
+  - **Persistent WebSockets**
+  - **Docker Images or custom executables**
 
 ## Environment Variables
 
